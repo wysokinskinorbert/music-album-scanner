@@ -1,82 +1,128 @@
-     1|import '../../../core/network/api_client.dart';
-     2|import '../../../core/constants/app_constants.dart';
-     3|
-     4|/// Discogs API integration as fallback for album recognition.
-     5|class DiscogsService {
-     6|  final ApiClient _client;
-     7|  String? _token;
-     8|
-     9|  DiscogsService(this._client);
-    10|
-    11|  void setToken(String token) => _token = token;
-    12|
-    13|  /// Search database by query string.
-    14|  Future<List<Map<String, dynamic>>> search({
-    15|    required String query,
-    16|    String type = 'release',
-    17|    int perPage = 5,
-    18|  }) async {
-    19|    final queryParams = {
-    20|      'q': query,
-    21|      'type': type,
-    22|      'per_page': perPage,
-    23|    };
-    24|    if (_token != null) {
-    25|      queryParams['token'] = _token;
-    26|    }
-    27|
-    28|    final response = await _client.get(
-    29|      '${AppConstants.discogsBaseUrl}/database/search',
-    30|      queryParameters: queryParams,
-    31|    );
-    32|
-    33|    final data = response.data as Map<String, dynamic>;
-    34|    final results = data['results'] as List<dynamic>? ?? [];
-    35|    return results.cast<Map<String, dynamic>>();
-    36|  }
-    37|
-    38|  /// Get detailed release information.
-    39|  Future<Map<String, dynamic>?> getRelease(int releaseId) async {
-    40|    final response = await _client.get(
-    41|      '${AppConstants.discogsBaseUrl}/releases/$releaseId',
-    42|    );
-    43|    return response.data as Map<String, dynamic>?;
-    44|  }
-    45|
-    46|  /// Parse Discogs release into standardized format.
-    47|  Map<String, dynamic> parseRelease(Map<String, dynamic> release) {
-    48|    final tracklist = <String>[];
-    49|    final rawTracklist = release['tracklist'] as List<dynamic>? ?? [];
-    50|    for (final track in rawTracklist) {
-    51|      tracklist.add(track['title'] as String? ?? '');
-    52|    }
-    53|
-    54|    final artists = release['artists'] as List<dynamic>? ?? [];
-    55|    final artistName = artists.isNotEmpty
-    56|        ? (artists[0]['name'] ?? 'Unknown')
-    57|        : 'Unknown';
-    58|
-    59|    final year = int.tryParse(release['year']?.toString() ?? '');
-    60|
-    61|    final genres = release['genres'] as List<dynamic>? ?? [];
-    62|    final styles = release['styles'] as List<dynamic>? ?? [];
-    63|    final genre = [...genres, ...styles].join(', ');
-    64|
-    65|    return {
-    66|      'discogsId': release['id']?.toString(),
-    67|      'title': release['title'] ?? 'Unknown',
-    68|      'artist': artistName,
-    69|      'releaseYear': year,
-    70|      'label': (release['labels'] as List<dynamic>? ?? [])
-    71|          .map((l) => l['name'] ?? '')
-    72|          .join(', '),
-    73|      'genre': genre.isNotEmpty ? genre : null,
-    74|      'country': release['country'],
-    75|      'tracklist': tracklist,
-    76|      'coverArtUrl': release['images']?.isNotEmpty == true
-    77|          ? release['images'][0]['uri']
-    78|          : null,
-    79|    };
-    80|  }
-    81|}
-    82|
+import '../../../core/network/api_client.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../models/album_model.dart';
+
+/// Discogs API integration for album recognition and metadata lookup.
+class DiscogsService {
+  final ApiClient _client;
+  String? _token;
+
+  DiscogsService(this._client);
+
+  void setToken(String token) => _token = token;
+
+  /// Search the Discogs database by query string.
+  Future<List<Map<String, dynamic>>> search({
+    required String query,
+    String type = 'release',
+    int perPage = 5,
+  }) async {
+    final queryParams = <String, dynamic>{
+      'q': query,
+      'type': type,
+      'per_page': perPage,
+    };
+    if (_token != null) {
+      queryParams['token'] = _token;
+    }
+
+    final response = await _client.get(
+      '${AppConstants.discogsBaseUrl}/database/search',
+      queryParameters: queryParams,
+    );
+
+    final data = response as Map<String, dynamic>;
+    final results = data['results'] as List<dynamic>? ?? [];
+    return results.cast<Map<String, dynamic>>();
+  }
+
+  /// Search for releases matching [query], optionally filtered by [artist].
+  /// Returns a list of [Album] objects parsed from Discogs results.
+  Future<List<Album>> searchRelease(String query, {String? artist}) async {
+    final fullQuery = artist != null && artist.isNotEmpty
+        ? '$artist $query'
+        : query;
+
+    final results = await search(query: fullQuery);
+
+    return results.map((r) {
+      final year = int.tryParse(r['year']?.toString() ?? '');
+      return Album(
+        id: 'discogs_${r['id'] ?? DateTime.now().millisecondsSinceEpoch}',
+        title: r['title'] ?? 'Unknown',
+        artist: _extractArtist(r) ?? 'Unknown',
+        releaseYear: year,
+        discogsId: r['id']?.toString(),
+        coverArtUrl: r['cover_image'] as String?,
+        dateAdded: DateTime.now(),
+        recognitionConfidence: 0.0,
+      );
+    }).toList();
+  }
+
+  /// Get detailed release information by Discogs release ID.
+  Future<Album?> getReleaseDetails(int discogsId) async {
+    final response = await _client.get(
+      '${AppConstants.discogsBaseUrl}/releases/$discogsId',
+    );
+
+    if (response == null) return null;
+    final release = response as Map<String, dynamic>;
+
+    return _parseReleaseToAlbum(release);
+  }
+
+  /// Parse a Discogs release response into an [Album].
+  Album _parseReleaseToAlbum(Map<String, dynamic> release) {
+    final tracklist = <String>[];
+    final rawTracklist = release['tracklist'] as List<dynamic>? ?? [];
+    for (final track in rawTracklist) {
+      tracklist.add(track['title'] as String? ?? '');
+    }
+
+    final artists = release['artists'] as List<dynamic>? ?? [];
+    final artistName = artists.isNotEmpty
+        ? (artists[0]['name'] ?? 'Unknown')
+        : 'Unknown';
+
+    final year = int.tryParse(release['year']?.toString() ?? '');
+
+    final genres = release['genres'] as List<dynamic>? ?? [];
+    final styles = release['styles'] as List<dynamic>? ?? [];
+    final genre = [...genres, ...styles].join(', ');
+
+    final labels = release['labels'] as List<dynamic>? ?? [];
+    final label = labels.isNotEmpty
+        ? labels.map((l) => l['name'] ?? '').join(', ')
+        : null;
+
+    return Album(
+      id: 'discogs_${release['id'] ?? DateTime.now().millisecondsSinceEpoch}',
+      title: release['title'] ?? 'Unknown',
+      artist: artistName,
+      releaseYear: year,
+      label: label,
+      genre: genre.isNotEmpty ? genre : null,
+      tracklist: tracklist,
+      coverArtUrl: release['images']?.isNotEmpty == true
+          ? release['images'][0]['uri']
+          : null,
+      country: release['country'],
+      dateAdded: DateTime.now(),
+      discogsId: release['id']?.toString(),
+      recognitionConfidence: 0.0,
+    );
+  }
+
+  /// Extract artist name from a Discogs search result.
+  String? _extractArtist(Map<String, dynamic> result) {
+    // Search results have the title as "Artist - Title"
+    final title = result['title'] as String?;
+    if (title == null) return null;
+    final dashIndex = title.indexOf(' - ');
+    if (dashIndex > 0) {
+      return title.substring(0, dashIndex);
+    }
+    return null;
+  }
+}
