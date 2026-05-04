@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:csv/csv.dart';
 import 'package:dart:convert';
 import 'package:file_picker/file_picker.dart';
-import '../../models/album.dart';
+import '../../models/album_model.dart';
 import '../../repositories/album_repository.dart';
 
 /// Import format types.

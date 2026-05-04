@@ -1,5 +1,5 @@
 import 'dart:io';
-import '../../data/models/album.dart';
+import '../../data/models/album_model.dart';
 import '../services/recognition_service.dart';
 import '../services/local_storage_service.dart';
 import 'package:logger/logger.dart';

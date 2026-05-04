@@ -1,4 +1,4 @@
-import '../../data/models/album.dart';
+import '../../data/models/album_model.dart';
 
 /// Filter criteria for album collection.
 class CollectionFilter {

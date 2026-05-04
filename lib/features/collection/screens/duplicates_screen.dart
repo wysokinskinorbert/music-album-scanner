@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../data/models/album.dart';
+import '../../../data/models/album_model.dart';
 import '../../../data/services/collection/duplicate_detector_service.dart';
 
 /// Screen for reviewing and resolving duplicate albums.

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../data/models/album.dart';
+import '../../../data/models/album_model.dart';
 import '../../../data/services/collection/collection_sort_service.dart';
 import '../../../data/services/collection/collection_filter_service.dart';
 import '../../collection/bloc/collection_bloc.dart';

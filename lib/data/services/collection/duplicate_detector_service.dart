@@ -1,4 +1,4 @@
-import '../../data/models/album.dart';
+import '../../data/models/album_model.dart';
 
 /// A pair of potentially duplicate albums.
 class DuplicatePair {

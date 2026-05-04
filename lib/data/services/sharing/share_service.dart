@@ -5,7 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import '../../models/album.dart';
+import '../../models/album_model.dart';
 
 /// Service for sharing album data and images.
 class ShareService {

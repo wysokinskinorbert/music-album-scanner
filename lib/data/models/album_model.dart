@@ -1,8 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:hive/hive.dart';
 
-part 'album_model.g.dart';
-
 /// Represents a recognized music album with full metadata.
 @HiveType(typeId: 0)
 class Album extends Equatable {
@@ -108,6 +106,12 @@ class Album extends Equatable {
       format: format ?? this.format,
     );
   }
+
+  /// Convenience getters for compatibility
+  int? get year => releaseYear;
+  double? get scanConfidence => recognitionConfidence == 0.0 ? null : recognitionConfidence;
+  bool? get isFavorite => null; // TODO: implement favorites
+  String? get recognitionSource => barcode != null ? 'barcode' : 'ocr';
 
   @override
   List<Object?> get props => [id, title, artist, musicBrainzId, discogsId];

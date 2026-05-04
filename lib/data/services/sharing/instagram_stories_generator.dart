@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../models/album.dart';
+import '../../models/album_model.dart';
 
 /// Generates Instagram Stories-ready images from album data.
 /// Output: 1080x1920 portrait image with album cover + gradient overlay.

@@ -7,7 +7,7 @@ import '../../data/services/sharing/share_service.dart';
 import '../../data/services/sharing/instagram_stories_generator.dart';
 import '../../data/services/sharing/infographic_generator.dart';
 import '../../data/services/export_import/export_service.dart';
-import '../../data/models/album.dart';
+import '../../data/models/album_model.dart';
 import '../collection/bloc/collection_bloc.dart';
 
 /// Screen for sharing and exporting album data.

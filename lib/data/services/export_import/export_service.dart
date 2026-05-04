@@ -5,7 +5,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../models/album.dart';
+import '../../models/album_model.dart';
 
 /// Export format types.
 enum ExportFormat { json, csv, pdf }

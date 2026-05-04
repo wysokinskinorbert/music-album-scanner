@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../data/models/album.dart';
+import '../../../data/models/album_model.dart';
 import '../../../data/services/collection/collection_stats_service.dart';
 
 /// Collection statistics dashboard.

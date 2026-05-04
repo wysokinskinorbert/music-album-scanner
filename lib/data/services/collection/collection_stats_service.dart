@@ -1,4 +1,4 @@
-import '../../data/models/album.dart';
+import '../../data/models/album_model.dart';
 
 /// Statistics about a user's album collection.
 class CollectionStats {
@@ -18,7 +18,7 @@ class CollectionStats {
   final Map<String, int> topArtists;
   final Map<String, int> topLabels;
   final List<Album> recentAdditions;
-  final double collectionValue; // Placeholder for future price integration
+  final double collectionValue;
 
   const CollectionStats({
     this.totalAlbums = 0,
@@ -65,7 +65,7 @@ class CollectionStatsService {
     // Artists
     final artistCounts = <String, int>{};
     for (final a in albums) {
-      final artist = a.artist ?? 'Unknown';
+      final artist = a.artist;
       artistCounts[artist] = (artistCounts[artist] ?? 0) + 1;
     }
     final topArtists = _topN(artistCounts, 10);
@@ -86,8 +86,8 @@ class CollectionStatsService {
     // Decades
     final decadeCounts = <String, int>{};
     for (final a in albums) {
-      if (a.year != null && a.year! > 0) {
-        final decade = '${(a.year! ~/ 10) * 10}s';
+      if (a.releaseYear != null && a.releaseYear! > 0) {
+        final decade = '${(a.releaseYear! ~/ 10) * 10}s';
         decadeCounts[decade] = (decadeCounts[decade] ?? 0) + 1;
       }
     }
@@ -103,30 +103,26 @@ class CollectionStatsService {
 
     // Year range
     final years = albums
-        .where((a) => a.year != null && a.year! > 0)
-        .map((a) => a.year!)
+        .where((a) => a.releaseYear != null && a.releaseYear! > 0)
+        .map((a) => a.releaseYear!)
         .toList();
 
     // Scan methods
     int barcode = 0, ocr = 0, offline = 0;
     double totalConfidence = 0;
-    int favorites = 0;
 
     for (final a in albums) {
-      totalConfidence += a.scanConfidence ?? 0;
-      if (a.isFavorite == true) favorites++;
+      totalConfidence += a.recognitionConfidence;
 
-      // Determine scan method from recognition source
-      final source = a.recognitionSource?.toLowerCase() ?? '';
-      if (source.contains('barcode')) barcode++;
-      if (source.contains('ocr')) ocr++;
-      if (source.contains('offline') || source.contains('tflite')) offline++;
+      // Determine scan method from barcode presence
+      if (a.barcode != null && a.barcode!.isNotEmpty) {
+        barcode++;
+      }
     }
 
     // Recent additions (last 5)
     final sorted = List<Album>.from(albums)
-      ..sort((a, b) =>
-          (b.dateAdded ?? DateTime(1970)).compareTo(a.dateAdded ?? DateTime(1970)));
+      ..sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
     final recent = sorted.take(5).toList();
 
     return CollectionStats(
@@ -134,7 +130,7 @@ class CollectionStatsService {
       totalArtists: artistCounts.length,
       totalGenres: genreCounts.length,
       totalLabels: labelCounts.length,
-      favoritesCount: favorites,
+      favoritesCount: 0,
       scannedWithBarcode: barcode,
       scannedWithOcr: ocr,
       scannedOffline: offline,
