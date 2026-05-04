@@ -1,13 +1,15 @@
+import 'package:uuid/uuid.dart';
 import '../models/album_model.dart';
 import '../services/storage/local_storage_service.dart';
 
 /// Repository pattern for album collection management.
 class AlbumRepository {
   final LocalStorageService _storage;
+  final _uuid = const Uuid();
 
   AlbumRepository(this._storage);
 
-  Future<Album> addAlbum(Album album) => _storage.addAlbum(album);
+  Future<void> addAlbum(Album album) => _storage.saveAlbum(album);
 
   Future<Album> createAlbum({
     required String title,
@@ -20,9 +22,13 @@ class AlbumRepository {
     String? userPhotoPath,
     String? musicBrainzId,
     String? discogsId,
-    double confidence = 0.0,
-  }) {
-    return _storage.createAlbumFromRecognition(
+    double recognitionConfidence = 0.0,
+    String? barcode,
+    String? country,
+    String? format,
+  }) async {
+    final album = Album(
+      id: _uuid.v4(),
       title: title,
       artist: artist,
       releaseYear: releaseYear,
@@ -31,18 +37,46 @@ class AlbumRepository {
       tracklist: tracklist,
       coverArtUrl: coverArtUrl,
       userPhotoPath: userPhotoPath,
+      dateAdded: DateTime.now(),
       musicBrainzId: musicBrainzId,
       discogsId: discogsId,
-      confidence: confidence,
+      recognitionConfidence: recognitionConfidence,
+      barcode: barcode,
+      country: country,
+      format: format,
     );
+    await _storage.saveAlbum(album);
+    return album;
   }
 
-  List<Album> getAllAlbums() => _storage.getAllAlbums();
-  Album? getAlbum(String id) => _storage.getAlbum(id);
-  Future<void> updateAlbum(Album album) => _storage.updateAlbum(album);
+  List<Album> getAllAlbums() => _storage.getAlbums();
+  Album? getAlbum(String id) => _storage.getAlbumById(id);
+  Future<void> updateAlbum(Album album) => _storage.saveAlbum(album);
   Future<void> deleteAlbum(String id) => _storage.deleteAlbum(id);
-  List<Album> search(String query) => _storage.searchCollection(query);
-  int get count => _storage.albumCount;
 
-  List<Map<String, dynamic>> exportCollection() => _storage.exportToJson();
+  List<Album> search(String query) {
+    final q = query.toLowerCase();
+    return _storage.getAlbums().where((a) =>
+      a.title.toLowerCase().contains(q) ||
+      a.artist.toLowerCase().contains(q) ||
+      (a.genre?.toLowerCase().contains(q) ?? false) ||
+      (a.label?.toLowerCase().contains(q) ?? false)
+    ).toList();
+  }
+
+  int get count => _storage.getAlbums().length;
+
+  List<Map<String, dynamic>> exportCollection() {
+    return _storage.getAlbums().map((a) => {
+      'id': a.id,
+      'title': a.title,
+      'artist': a.artist,
+      'releaseYear': a.releaseYear,
+      'genre': a.genre,
+      'label': a.label,
+      'barcode': a.barcode,
+      'musicBrainzId': a.musicBrainzId,
+      'discogsId': a.discogsId,
+    }).toList();
+  }
 }
