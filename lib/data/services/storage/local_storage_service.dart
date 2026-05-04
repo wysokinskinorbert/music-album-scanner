@@ -1,6 +1,5 @@
 import 'package:hive/hive.dart';
 import '../../models/album_model.dart';
-import '../../models/album_model.g.dart';
 
 /// Local storage service using Hive for offline-first persistence.
 class LocalStorageService {
