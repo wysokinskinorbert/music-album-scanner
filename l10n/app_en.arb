@@ -1,0 +1,260 @@
+{
+  "@@locale": "en",
+
+  "appTitle": "Album Scanner",
+  "@appTitle": { "description": "Application title" },
+
+  "tabCollection": "Collection",
+  "@tabCollection": { "description": "Bottom nav tab label" },
+
+  "tabScan": "Scan",
+  "@tabScan": { "description": "Bottom nav scan tab" },
+
+  "tabSettings": "Settings",
+  "@tabSettings": { "description": "Bottom nav settings tab" },
+
+  "tabWishlist": "Wishlist",
+  "@tabWishlist": { "description": "Bottom nav wishlist tab" },
+
+  "scanTitle": "Scan Album",
+  "@scanTitle": { "description": "Scan screen title" },
+
+  "scanInstructions": "Point the camera at an album cover or barcode",
+  "@scanInstructions": { "description": "Camera viewfinder instructions" },
+
+  "scanButton": "Scan",
+  "@scanButton": { "description": "Scan action button" },
+
+  "scanGalleryButton": "Pick from Gallery",
+  "@scanGalleryButton": { "description": "Gallery picker button" },
+
+  "scanManualButton": "Search Manually",
+  "@scanManualButton": { "description": "Manual search button" },
+
+  "scanProcessing": "Analyzing...",
+  "@scanProcessing": { "description": "Processing indicator" },
+
+  "scanStageBarcode": "Scanning barcode...",
+  "@scanStageBarcode": { "description": "Pipeline stage" },
+
+  "scanStageOcr": "Reading text...",
+  "@scanStageOcr": { "description": "Pipeline stage" },
+
+  "scanStageLabeling": "Analyzing cover...",
+  "@scanStageLabeling": { "description": "Pipeline stage" },
+
+  "scanStageSearch": "Searching databases...",
+  "@scanStageSearch": { "description": "Pipeline stage" },
+
+  "scanStageOffline": "Offline matching...",
+  "@scanStageOffline": { "description": "Pipeline stage" },
+
+  "resultTitle": "Scan Result",
+  "@resultTitle": { "description": "Result screen title" },
+
+  "resultConfidence": "Confidence: {percentage}%",
+  "@resultConfidence": {
+    "description": "Confidence percentage",
+    "placeholders": {
+      "percentage": { "type": "double", "format": "###.0" }
+    }
+  },
+
+  "resultAddToCollection": "Add to Collection",
+  "@resultAddToCollection": { "description": "CTA button" },
+
+  "resultAlternatives": "Other matches",
+  "@resultAlternatives": { "description": "Alternative results header" },
+
+  "resultNoMatch": "No album found",
+  "@resultNoMatch": { "description": "No match state" },
+
+  "resultNoMatchHint": "Try a clearer photo, different angle, or search manually.",
+  "@resultNoMatchHint": { "description": "No match help text" },
+
+  "collectionTitle": "My Collection",
+  "@collectionTitle": { "description": "Collection screen title" },
+
+  "collectionEmpty": "No albums yet",
+  "@collectionEmpty": { "description": "Empty collection title" },
+
+  "collectionEmptySubtitle": "Scan your first album to start building your collection",
+  "@collectionEmptySubtitle": { "description": "Empty collection subtitle" },
+
+  "collectionSearch": "Search collection...",
+  "@collectionSearch": { "description": "Search field hint" },
+
+  "collectionAlbumCount": "{count} albums",
+  "@collectionAlbumCount": {
+    "description": "Album count label",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "albumTracklist": "Tracklist",
+  "@albumTracklist": { "description": "Tracklist section header" },
+
+  "albumGenre": "Genre",
+  "@albumGenre": { "description": "Genre label" },
+
+  "albumLabel": "Label",
+  "@albumLabel": { "description": "Record label" },
+
+  "albumYear": "Year",
+  "@albumYear": { "description": "Release year label" },
+
+  "albumBarcode": "Barcode",
+  "@albumBarcode": { "description": "Barcode label" },
+
+  "settingsTitle": "Settings",
+  "@settingsTitle": { "description": "Settings screen title" },
+
+  "settingsRecognition": "Recognition",
+  "@settingsRecognition": { "description": "Settings section" },
+
+  "settingsOnlineRecognition": "Online Recognition",
+  "@settingsOnlineRecognition": { "description": "Toggle label" },
+
+  "settingsOcr": "OCR Text Extraction",
+  "@settingsOcr": { "description": "Toggle label" },
+
+  "settingsBarcode": "Barcode Scanning",
+  "@settingsBarcode": { "description": "Toggle label" },
+
+  "settingsVisual": "Visual Analysis",
+  "@settingsVisual": { "description": "Toggle label" },
+
+  "settingsOffline": "Offline Mode",
+  "@settingsOffline": { "description": "Settings section" },
+
+  "settingsManageModels": "Manage Models",
+  "@settingsManageModels": { "description": "Model management" },
+
+  "settingsHaptic": "Haptic Feedback",
+  "@settingsHaptic": { "description": "Toggle label" },
+
+  "settingsData": "Data",
+  "@settingsData": { "description": "Settings section" },
+
+  "settingsShareExport": "Share & Export",
+  "@settingsShareExport": { "description": "Settings link" },
+
+  "settingsImport": "Import Collection",
+  "@settingsImport": { "description": "Settings link" },
+
+  "settingsClear": "Clear Collection",
+  "@settingsClear": { "description": "Destructive action" },
+
+  "settingsAbout": "About",
+  "@settingsAbout": { "description": "Settings section" },
+
+  "settingsVersion": "Version",
+  "@settingsVersion": { "description": "Version label" },
+
+  "errorNoConnection": "No internet connection. Check your network settings.",
+  "@errorNoConnection": { "description": "Network error" },
+
+  "errorTimeout": "Server is not responding. Try again in a moment.",
+  "@errorTimeout": { "description": "Timeout error" },
+
+  "errorRateLimited": "Too many requests. Wait a moment and try again.",
+  "@errorRateLimited": { "description": "Rate limit error" },
+
+  "errorNoResults": "No album found. Try a photo from a different angle.",
+  "@errorNoResults": { "description": "API no results" },
+
+  "errorLowConfidence": "Recognition uncertain. Try a clearer photo.",
+  "@errorLowConfidence": { "description": "Low confidence" },
+
+  "errorCamera": "Camera permission is required to scan albums.",
+  "@errorCamera": { "description": "Camera permission" },
+
+  "errorGeneric": "An unexpected error occurred. Please try again.",
+  "@errorGeneric": { "description": "Generic fallback error" },
+
+  "exportJson": "JSON",
+  "@exportJson": { "description": "Export format" },
+
+  "exportCsv": "CSV",
+  "@exportCsv": { "description": "Export format" },
+
+  "exportPdf": "PDF",
+  "@exportPdf": { "description": "Export format" },
+
+  "importDiscogs": "Discogs CSV",
+  "@importDiscogs": { "description": "Import source" },
+
+  "importMusicbrainz": "MusicBrainz JSON",
+  "@importMusicbrainz": { "description": "Import source" },
+
+  "importGeneric": "Album Scanner JSON",
+  "@importGeneric": { "description": "Import source" },
+
+  "importComplete": "Import Complete",
+  "@importComplete": { "description": "Import result title" },
+
+  "imported": "Imported",
+  "@imported": { "description": "Import stat" },
+
+  "duplicates": "Duplicates",
+  "@duplicates": { "description": "Import stat" },
+
+  "skipped": "Skipped",
+  "@skipped": { "description": "Import stat" },
+
+  "onboardingPage1Title": "Scan Your Vinyl",
+  "@onboardingPage1Title": { "description": "Onboarding" },
+
+  "onboardingPage1Subtitle": "Point your camera at any album cover, barcode, or label",
+  "@onboardingPage1Subtitle": { "description": "Onboarding" },
+
+  "onboardingPage2Title": "Instant Recognition",
+  "@onboardingPage2Subtitle": "Our AI identifies albums from text, barcodes, and visual analysis",
+
+  "onboardingPage3Title": "Build Your Collection",
+  "@onboardingPage3Subtitle": "Track every album, discover duplicates, and share your library",
+
+  "onboardingSkip": "Skip",
+  "@onboardingSkip": { "description": "Onboarding" },
+
+  "onboardingGetStarted": "Get Started",
+  "@onboardingGetStarted": { "description": "Onboarding CTA" },
+
+  "statsTitle": "Collection Stats",
+  "@statsTitle": { "description": "Stats screen" },
+
+  "statsTotalAlbums": "Total Albums",
+  "statsTotalArtists": "Total Artists",
+  "statsTotalGenres": "Total Genres",
+  "statsAvgConfidence": "Avg Confidence",
+  "statsFavorites": "Favorites",
+
+  "wishlistTitle": "Wishlist",
+  "@wishlistTitle": { "description": "Wishlist screen" },
+
+  "wishlistEmpty": "Wishlist is empty",
+  "@wishlistEmpty": { "description": "Empty wishlist" },
+
+  "wishlistAddManual": "Add Album",
+  "@wishlistAddManual": { "description": "Manual add" },
+
+  "retry": "Retry",
+  "@retry": { "description": "Retry button" },
+
+  "cancel": "Cancel",
+  "@cancel": { "description": "Cancel button" },
+
+  "delete": "Delete",
+  "@delete": { "description": "Delete button" },
+
+  "share": "Share",
+  "@share": { "description": "Share button" },
+
+  "save": "Save",
+  "@save": { "description": "Save button" },
+
+  "done": "Done",
+  "@done": { "description": "Done button" },
+
+  "loading": "Loading...",
+  "@loading": { "description": "Loading indicator" }
+}

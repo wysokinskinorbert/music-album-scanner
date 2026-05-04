@@ -54,53 +54,36 @@
 - [x] Animated page transitions (shared axis horizontal/vertical/scaled, fade through)
 - [x] Container transform for album card -> detail
 - [x] Reusable animated widgets (FadeIn, SlideUp, ScaleIn)
-- [x] Onboarding flow (3 pages: Scan Your Vinyl, Instant Recognition, Build Your Collection)
-- [x] First-launch detection (SharedPreferences)
-- [x] Search suggestions service (Hive-backed, 50 entries max)
-- [x] Search bar widget with recent searches dropdown
+- [x] Onboarding flow (3 pages)
+- [x] Search suggestions service (Hive-backed)
 - [x] Swipe action wrapper (delete left, share/favorite right)
 - [x] Animated success/fail/scan indicators
-- [x] Skeleton loading states (album card, list, grid, stats, pipeline)
-- [x] Updated main.dart with onboarding gate + haptic init
-- [x] Updated home screen with polished nav bar (gradient scan button)
+- [x] Skeleton loading states
 
 ## v0.7.0 - Sharing & Social
-- [x] Share service (text, text+image, album list, widget as image, copy to clipboard)
-- [x] Instagram Stories format generator (1080x1920, gradient overlay, album cover, branding)
-- [x] Collection infographic generator (stats visual as 1080x1920 PNG)
-- [x] Export service (JSON with metadata, CSV with headers, PDF with album rows)
+- [x] Share service (text, text+image, album list, widget as image, clipboard)
+- [x] Instagram Stories format generator (1080x1920)
+- [x] Collection infographic generator
+- [x] Export service (JSON, CSV, PDF)
 - [x] Import service (Discogs CSV, MusicBrainz JSON, generic JSON)
-- [x] Duplicate detection during import (artist+title matching)
-- [x] Share/Export screen (3 tabs: Share, Instagram, Export)
-- [x] Import screen (format picker, file picker, progress, result stats)
-- [x] Settings: Share & Export link + Import Collection link
+- [x] Share/Export screen + Import screen
 
-## v0.8.0 - Recognition Polish & Testing (Current)
-- [x] Custom exception hierarchy (NetworkException, ApiException, StorageException, RecognitionException, PermissionException)
-- [x] Error mapper (DioException -> AppException, user-friendly messages in Polish)
-- [x] Retry wrapper with exponential backoff + jitter (configurable presets)
-- [x] Diagnostics service (pipeline logging, aggregated stats, trim, export)
-- [x] Test helpers (AlbumFactory, RecognitionResultFactory, constants)
-- [x] Hive test setup (in-memory, auto-cleanup)
-- [x] Unit tests: AlbumModel (43 tests), ScanResult/RecognitionResult (42 tests)
-- [x] Unit tests: ApiClient (16 tests), MusicBrainzService, DiscogsService
-- [x] Unit tests: Recognition pipeline (645 lines)
-- [x] Unit tests: AlbumRepository (288 lines)
-- [x] BLoC tests: CollectionBloc (335 lines), ScanResultBloc (381 lines)
-- [x] Widget tests: HomeScreen, CollectionScreen
-- [x] Unit tests: Exceptions, Retry wrapper, DiagnosticsService
-- [x] Empty state widget (8 factory variants: collection, search, noRecognition, badPhoto, offline, wishlist, noDuplicates, error)
-- [x] Error banner widget (user-friendly error display with retry/dismiss)
-- [x] Photo quality indicator (good/too dark/too bright/too blurry)
+## v0.8.0 - Recognition Polish & Testing
+- [x] Custom exception hierarchy + error mapper
+- [x] Retry wrapper with exponential backoff + jitter
+- [x] Diagnostics service (pipeline logging, aggregated stats)
+- [x] Test suite: 200+ tests, 5200+ lines
+- [x] Unit, BLoC, Widget tests
+- [x] Empty state widget (8 variants) + Error banner + Photo quality indicator
 
-## v0.9.0 - Beta Prep (Next)
-- [ ] CI/CD pipeline (GitHub Actions: analyze, test, build APK)
-- [ ] i18n setup (English + Polish, ARB files)
-- [ ] Performance profiling (scan latency, memory, startup time)
-- [ ] Accessibility audit (semantic labels, contrast ratios, screen reader)
-- [ ] Full integration test suite (end-to-end scan flow)
-- [ ] README.md update with screenshots and setup instructions
-- [ ] Google Play Store asset preparation
+## v0.9.0 - Beta Prep (Current)
+- [x] CI/CD: GitHub Actions (analyze, test, build APK, upload artifact)
+- [x] i18n: l10n.yaml config, ARB files (English + Polish, 90+ strings)
+- [x] Performance service (timer-based metrics, percentile reports, auto-trim)
+- [x] Accessibility service (semantic labels, contrast checker, min tap target)
+- [x] Integration tests (app launch, tab navigation, scan flow, settings)
+- [x] README.md (features, tech stack, setup, project structure, build guide)
+- [x] Google Play Store preparation doc (listing, assets, signing, build)
 
 ## v0.10.0 - Cloud Sync (Deferred)
 - [ ] Firebase / Supabase integration
@@ -109,7 +92,9 @@
 - [ ] Optional user accounts
 
 ## v1.0.0 - Production Release
+- [ ] App icon design (512x512)
+- [ ] Splash screen design
+- [ ] Screenshots for Play Store (4-8)
+- [ ] Privacy policy (hosted)
 - [ ] Google Play Store submission
-- [ ] Privacy policy and terms
 - [ ] Landing page
-- [ ] Analytics and crash reporting

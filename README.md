@@ -1,40 +1,47 @@
-# Music Album Scanner
+# Album Scanner
 
-An AI-powered Android application for music album recognition and collection management.
+A mobile app for recognizing music albums via camera, retrieving full metadata, and managing a physical album collection digitally.
 
-Scan physical album covers with your camera, identify them using machine learning,
-and build a digital catalog of your music collection.
+Built with Flutter, designed for Android (API 26+).
 
 ## Features
 
-- **Camera Recognition** - Point your camera at any album cover to identify it
-- **Dual Engine** - Online (MusicBrainz + Discogs) and offline (TFLite) recognition
-- **Artistic Covers** - Recognizes covers without text or barcodes using visual matching
-- **Rich Metadata** - Artist, title, tracklist, year, label, genre, and cover art
-- **Offline-First** - Your collection works fully without internet
-- **Image Editor** - Crop and enhance photos before recognition
-- **One-Handed UX** - Bottom navigation, large buttons, swipe gestures
-- **Export** - Share your collection as JSON or CSV
-- **No Registration** - Works out of the box, no account needed
+- **Camera Recognition** - Point at any album cover, barcode, or label
+- **Multi-Strategy Pipeline** - Barcode scanning, OCR text extraction, ML Kit visual analysis
+- **API Integration** - MusicBrainz (primary) + Discogs (fallback) + Cover Art Archive
+- **Offline Mode** - TFLite MobileNet for offline recognition + cosine similarity matching
+- **Image Editor** - Crop, perspective correction, auto-enhance before recognition
+- **Collection Management** - Sort, filter, stats, duplicate detection, batch scan
+- **Wishlist** - Track albums you want to find
+- **Share & Export** - JSON/CSV/PDF export, Instagram Stories, share to any app
+- **Import** - Discogs CSV, MusicBrainz JSON, Album Scanner JSON
+- **Polish** - Haptic feedback, animations, onboarding, skeleton loading, dark theme
+
+## Screenshots
+
+> Screenshots will be added before Play Store submission.
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|-----------|
-| Framework | Flutter 3.41+ (Dart 3.11+) |
-| State Management | flutter_bloc |
+| Layer | Technology |
+|-------|-----------|
+| Framework | Flutter 3.24+ (Dart) |
+| State Management | flutter_bloc (BLoC pattern) |
+| Architecture | Clean Architecture (Presentation -> Domain -> Data) |
 | Local Storage | Hive |
-| Network | Dio |
-| ML Online | Google ML Kit |
-| ML Offline | TFLite |
-| Camera | camera plugin |
+| Networking | Dio |
+| ML/Recognition | Google ML Kit, TFLite MobileNet |
+| APIs | MusicBrainz, Discogs, Cover Art Archive |
+| Image Processing | image package |
+| CI/CD | GitHub Actions |
 
 ## Getting Started
 
 ### Prerequisites
-- Flutter SDK 3.41+ (stable channel)
+
+- Flutter SDK 3.24+ ([install](https://docs.flutter.dev/get-started/install))
 - Android SDK (API 26+)
-- Android Studio or VS Code with Flutter extension
+- Android Studio or VS Code
 
 ### Setup
 
@@ -46,11 +53,24 @@ cd music-album-scanner
 # Install dependencies
 flutter pub get
 
-# Run code generation (Hive adapters)
-dart run build_runner build
+# Generate localization files
+flutter gen-l10n
 
-# Run the app
+# Run on connected device/emulator
 flutter run
+```
+
+### Running Tests
+
+```bash
+# Unit + widget tests
+flutter test
+
+# With coverage
+flutter test --coverage
+
+# Integration tests (requires connected device)
+flutter test integration_test/
 ```
 
 ### Building APK
@@ -59,48 +79,53 @@ flutter run
 flutter build apk --release
 ```
 
-## Architecture
-
-The app follows **Clean Architecture** with three layers:
-
-```
-Presentation (Screens + BLoC) → Domain (Repositories) → Data (APIs + Storage)
-```
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed system design.
-
 ## Project Structure
 
 ```
 lib/
-├── core/           # Theme, constants, network, utilities
-├── data/           # Models, repositories, services (API, ML, storage)
-├── features/       # Feature modules (camera, collection, scan_result, settings)
-│   ├── bloc/       # BLoC events, states, and logic
-│   ├── widgets/    # Feature-specific UI components
-│   └── *_screen.dart  # Feature screens
-└── main.dart       # App entry point
+  core/           # Theme, network, errors, services
+  data/           # Models, API services, repositories, ML services
+  features/       # Feature modules (screens, BLoC, widgets)
+    camera/       # Camera + scan flow
+    collection/   # Collection management
+    home/         # Home screen + navigation
+    settings/     # App settings
+    sharing/      # Share + export
+    import_export/# Import
+    common/       # Shared widgets (empty states, error banner)
+  main.dart       # Entry point with onboarding gate
+
+test/             # Unit + widget tests (200+ tests)
+integration_test/ # E2E integration tests
+l10n/             # i18n ARB files (EN, PL)
 ```
 
-## API Usage
+## Architecture
 
-This app uses free, commercially-available APIs:
+```
+Presentation (Screens, Widgets, BLoC)
+         |
+      Domain (Models, Repository Interfaces)
+         |
+       Data (API Services, Storage, ML Services, Repositories)
+```
 
-| API | Purpose | Key Required |
-|-----|---------|-------------|
-| [MusicBrainz](https://musicbrainz.org) | Album metadata | No |
-| [Cover Art Archive](https://coverartarchive.org) | Cover art images | No |
-| [Discogs](https://www.discogs.com) | Fallback metadata | Optional |
-| Google ML Kit | On-device OCR/labeling | No |
+## API Keys
 
-## Roadmap
+- **MusicBrainz**: Free, no key required (1 req/sec rate limit)
+- **Discogs**: Free tier (25 req/min), optional personal token for higher limits (60 req/min)
+- **Cover Art Archive**: Free, no key required
 
-See [ROADMAP.md](ROADMAP.md) for planned features and milestones.
+No API keys are needed for basic functionality. Discogs token can be configured in Settings.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License - see [LICENSE](LICENSE)
 
-## Author
+## Roadmap
 
-Built by [wysokinskinorbert](https://github.com/wysokinskinorbert)
+See [ROADMAP.md](ROADMAP.md) for the full development roadmap.
+
+## Contributing
+
+This is a personal project, but suggestions and bug reports are welcome via GitHub Issues.
