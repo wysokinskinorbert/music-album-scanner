@@ -4,6 +4,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/services/haptic_service.dart';
 import '../../data/repositories/album_repository.dart';
 import '../collection/bloc/collection_bloc.dart';
+import '../camera/bloc/camera_bloc.dart';
 import '../collection/collection_screen.dart';
 import '../camera/scan_screen.dart';
 import '../settings/settings_screen.dart';
@@ -36,7 +37,10 @@ class _HomeScreenState extends State<HomeScreen> {
             create: (_) => CollectionBloc(repository)..add(LoadCollection()),
             child: const CollectionScreen(),
           ),
-          const ScanScreen(),
+          BlocProvider(
+            create: (_) => CameraBloc(),
+            child: const ScanScreen(),
+          ),
           const SettingsScreen(),
         ],
       ),
