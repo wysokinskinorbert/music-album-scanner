@@ -1,461 +1,289 @@
-import '../../core/network/api_client.dart';
 import '../../core/network/connectivity_service.dart';
-import '../../core/constants/app_constants.dart';
-import '../models/recognition_result.dart';
 import 'api/musicbrainz_service.dart';
 import 'api/discogs_service.dart';
 import 'ml/text_extraction_service.dart';
 import 'ml/image_labeling_service.dart';
 import 'ml/barcode_scanning_service.dart';
-import 'ml/offline_recognition_service.dart';
+import 'offline/offline_recognition_service.dart';
+import '../models/album_model.dart';
+import '../models/recognition_result.dart';
+import 'package:logger/logger.dart';
 
-/// Orchestrates the full album recognition pipeline.
+/// Multi-strategy album recognition orchestrator.
 ///
-/// Strategy priority:
-///   1. Barcode scan (EAN/UPC) -> direct MusicBrainz lookup
-///   2. OCR text extraction -> MusicBrainz search -> Discogs fallback
-///   3. Image labeling (visual analysis) -> context-assisted search
-///   4. Offline TFLite model (if downloaded)
+/// Pipeline order (stops at first confident match):
+///   1. Barcode scan -> MusicBrainz direct lookup (95%)
+///   2. OCR text -> MusicBrainz search (85%)
+///   3. OCR text -> Discogs fallback (75%)
+///   4. Visual labels -> context-assisted search (60%)
+///   5. Offline TFLite model / embedding match (50-80%)
+///   6. Fail -> return best partial result
 class RecognitionService {
   final MusicBrainzService _musicBrainz;
   final DiscogsService _discogs;
-  final OfflineRecognitionService _offline;
-  final ConnectivityService _connectivity;
   final TextExtractionService _textExtractor;
   final ImageLabelingService _imageLabeler;
   final BarcodeScanningService _barcodeScanner;
+  final OfflineRecognitionService? _offlineService;
+  final ConnectivityService _connectivity;
+  final Logger _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
   RecognitionService({
-    required ApiClient apiClient,
+    required MusicBrainzService musicBrainz,
+    required DiscogsService discogs,
+    required TextExtractionService textExtractor,
+    required ImageLabelingService imageLabeler,
+    required BarcodeScanningService barcodeScanner,
     required ConnectivityService connectivity,
-  })  : _musicBrainz = MusicBrainzService(apiClient),
-        _discogs = DiscogsService(apiClient),
-        _offline = OfflineRecognitionService(),
+    OfflineRecognitionService? offlineService,
+  })  : _musicBrainz = musicBrainz,
+        _discogs = discogs,
+        _textExtractor = textExtractor,
+        _imageLabeler = imageLabeler,
+        _barcodeScanner = barcodeScanner,
         _connectivity = connectivity,
-        _textExtractor = TextExtractionService(),
-        _imageLabeler = ImageLabelingService(),
-        _barcodeScanner = BarcodeScanningService();
+        _offlineService = offlineService;
 
-  /// Main recognition entry point.
-  /// Runs the full pipeline and returns the best result.
-  Future<RecognitionPipelineResult> recognizeAlbum(String imagePath) async {
-    final pipelineResults = <RecognitionStep>[];
+  /// Full recognition pipeline with step-by-step progress.
+  Future<RecognitionResult> recognize(
+    String imagePath, {
+    void Function(String step, int completed, int total)? onProgress,
+  }) async {
+    const totalSteps = 5;
+    int completed = 0;
+    final pipelineLog = <String>[];
+    String? extractedText;
+    String? coverType;
 
-    // Step 1: Try barcode scanning (fastest, most accurate)
-    final barcodeResult = await _tryBarcodeRecognition(imagePath);
-    pipelineResults.add(RecognitionStep(
-      name: 'Barcode Scan',
-      success: barcodeResult != null,
-      confidence: barcodeResult?.confidence ?? 0,
-    ));
-    if (barcodeResult != null && barcodeResult.isSuccess && barcodeResult.isHighConfidence) {
-      return RecognitionPipelineResult(
-        bestResult: barcodeResult,
-        allResults: [barcodeResult],
-        pipeline: pipelineResults,
-        coverAnalysis: null,
-        extractedText: null,
-      );
+    void progress(String step) {
+      pipelineLog.add(step);
+      onProgress?.call(step, completed, totalSteps);
     }
 
-    // If offline, skip online steps
-    if (!_connectivity.isOnline) {
-      final offlineResult = await _tryOfflineRecognition(imagePath);
-      pipelineResults.add(RecognitionStep(
-        name: 'Offline Model',
-        success: offlineResult != null,
-        confidence: offlineResult?.confidence ?? 0,
-      ));
-      return RecognitionPipelineResult(
-        bestResult: offlineResult ?? const RecognitionResult(
-          confidence: 0,
-          source: 'none',
-          errorMessage: 'No internet connection and offline model not available.',
-        ),
-        allResults: [if (offlineResult != null) offlineResult],
-        pipeline: pipelineResults,
-        coverAnalysis: null,
-        extractedText: null,
-      );
-    }
+    try {
+      // ==========================================
+      // STEP 1: Barcode Scan
+      // ==========================================
+      progress('Scanning for barcode...');
+      final barcodeResult = await _barcodeScanner.scanFromFile(imagePath);
 
-    // Step 2: OCR text extraction + MusicBrainz search
-    CoverAnalysis? coverAnalysis;
-    ExtractedText? extractedText;
+      if (barcodeResult != null && barcodeResult.isAlbumBarcode) {
+        completed++;
+        progress('Barcode found: \${barcodeResult.displayValue}');
 
-    final textResult = await _textExtractor.extractText(imagePath);
-    extractedText = textResult;
+        if (await _connectivity.isOnline) {
+          final album = await _musicBrainz.searchByBarcode(barcodeResult.displayValue);
+          if (album != null) {
+            progress('MusicBrainz barcode match!');
+            return _success(
+              album: album,
+              confidence: 0.95,
+              source: 'Barcode',
+              pipelineSummary: pipelineLog.join(' -> '),
+              extractedText: null,
+            );
+          }
+        }
+      }
+      completed++;
 
-    // Also analyze the cover visually in parallel
-    coverAnalysis = await _imageLabeler.analyzeCover(imagePath);
+      // If offline, skip to offline recognition
+      if (!await _connectivity.isOnline) {
+        progress('Offline mode - trying local recognition...');
+        return await _tryOfflineRecognition(
+          imagePath, pipelineLog, extractedText,
+        );
+      }
 
-    if (textResult.hasText) {
-      // Generate multiple search queries from extracted text
-      final queries = _textExtractor.generateSearchQueries(textResult);
+      // ==========================================
+      // STEP 2: OCR Text Extraction + MusicBrainz
+      // ==========================================
+      progress('Extracting text from cover...');
+      final textResult = await _textExtractor.extractTextFromFile(imagePath);
+      extractedText = textResult?.fullText;
 
-      for (final query in queries.take(3)) {
-        final ocrResult = await _searchWithFallback(query);
-        pipelineResults.add(RecognitionStep(
-          name: 'OCR: "${query.length > 30 ? '${query.substring(0, 30)}...' : query}"',
-          success: ocrResult.isSuccess,
-          confidence: ocrResult.confidence,
-        ));
+      if (textResult != null && textResult.searchQueries.isNotEmpty) {
+        progress('OCR: found \${textResult.searchQueries.length} queries');
 
-        if (ocrResult.isSuccess && ocrResult.confidence >= 0.7) {
-          return RecognitionPipelineResult(
-            bestResult: ocrResult,
-            allResults: [if (barcodeResult != null) barcodeResult, ocrResult],
-            pipeline: pipelineResults,
-            coverAnalysis: coverAnalysis,
+        for (final query in textResult.searchQueries) {
+          final mbResults = await _musicBrainz.searchRelease(query);
+          if (mbResults.isNotEmpty) {
+            completed++;
+            final best = mbResults.first;
+            final confidence = mbResults.length == 1 ? 0.85 : 0.80;
+
+            // Enrich with full release details
+            Album? enriched;
+            if (best.musicBrainzId != null) {
+              enriched = await _musicBrainz.getReleaseDetails(
+                best.musicBrainzId!,
+              );
+            }
+
+            progress('MusicBrainz match: \${best.title}');
+            return _success(
+              album: enriched ?? best,
+              confidence: confidence,
+              source: 'MusicBrainz (OCR)',
+              pipelineSummary: pipelineLog.join(' -> '),
+              extractedText: extractedText,
+            );
+          }
+        }
+      }
+      completed++;
+
+      // ==========================================
+      // STEP 3: Discogs Fallback
+      // ==========================================
+      progress('Searching Discogs...');
+      final discogsQueries = textResult?.searchQueries ?? [];
+
+      for (final query in discogsQueries.take(2)) {
+        final discogsResults = await _discogs.searchRelease(query);
+        if (discogsResults.isNotEmpty) {
+          completed++;
+          final best = discogsResults.first;
+
+          progress('Discogs match: \${best.title}');
+          return _success(
+            album: best,
+            confidence: 0.75,
+            source: 'Discogs (OCR)',
+            pipelineSummary: pipelineLog.join(' -> '),
             extractedText: extractedText,
           );
         }
       }
-    }
+      completed++;
 
-    // Step 3: Visual label-assisted search
-    if (coverAnalysis.labels.isNotEmpty) {
-      final visualResult = await _tryVisualSearch(coverAnalysis, textResult);
-      pipelineResults.add(RecognitionStep(
-        name: 'Visual Analysis',
-        success: visualResult?.isSuccess ?? false,
-        confidence: visualResult?.confidence ?? 0,
-      ));
-      if (visualResult != null && visualResult.isSuccess) {
-        return RecognitionPipelineResult(
-          bestResult: visualResult,
-          allResults: [
-            if (barcodeResult != null) barcodeResult,
-            visualResult,
-          ],
-          pipeline: pipelineResults,
-          coverAnalysis: coverAnalysis,
-          extractedText: extractedText,
-        );
+      // ==========================================
+      // STEP 4: Visual Analysis
+      // ==========================================
+      progress('Analyzing cover artwork...');
+      final labelResult = await _imageLabeler.analyzeFromFile(imagePath);
+      coverType = labelResult.coverType;
+
+      if (labelResult.labels.isNotEmpty) {
+        // Build a search query from visual labels
+        final visualQuery = labelResult.labels
+            .take(3)
+            .map((l) => l.label)
+            .join(' ');
+        progress('Visual: "$visualQuery"');
+
+        // Try MusicBrainz with visual context
+        final mbResults = await _musicBrainz.searchRelease(visualQuery);
+        if (mbResults.isNotEmpty) {
+          final best = mbResults.first;
+          progress('Visual match: \${best.title}');
+          return _success(
+            album: best,
+            confidence: 0.60,
+            source: 'Visual Analysis',
+            pipelineSummary: pipelineLog.join(' -> '),
+            extractedText: extractedText,
+          );
+        }
       }
-    }
+      completed++;
 
-    // Step 4: Offline model as last resort
-    if (_offline.isModelLoaded) {
-      final offlineResult = await _tryOfflineRecognition(imagePath);
-      pipelineResults.add(RecognitionStep(
-        name: 'Offline Model',
-        success: offlineResult != null,
-        confidence: offlineResult?.confidence ?? 0,
-      ));
-      if (offlineResult != null) {
-        return RecognitionPipelineResult(
-          bestResult: offlineResult,
-          allResults: [
-            if (barcodeResult != null) barcodeResult,
-            offlineResult,
-          ],
-          pipeline: pipelineResults,
-          coverAnalysis: coverAnalysis,
-          extractedText: extractedText,
-        );
+      // ==========================================
+      // STEP 5: Offline TFLite / Embedding Match
+      // ==========================================
+      if (_offlineService != null && _offlineService.isAvailable) {
+        progress('Trying offline recognition...');
+        final offlineResult = await _offlineService.recognize(imagePath);
+
+        if (offlineResult.recognized && offlineResult.confidence >= 0.50) {
+          final album = offlineResult.toAlbum(photoPath: imagePath);
+          progress('Offline match: \${album.title}');
+          return _success(
+            album: album,
+            confidence: offlineResult.confidence,
+            source: 'Offline (\${offlineResult.method})',
+            pipelineSummary: pipelineLog.join(' -> '),
+            extractedText: extractedText,
+          );
+        }
       }
+
+      // ==========================================
+      // ALL FAILED
+      // ==========================================
+      progress('No match found');
+      return RecognitionResult(
+        state: RecognitionState.failed,
+        message: 'Could not identify this album. Try a clearer photo or use manual search.',
+        pipelineSummary: pipelineLog.join(' -> '),
+        extractedText: extractedText,
+      );
+    } catch (e) {
+      _logger.e('Recognition pipeline error: $e');
+      return RecognitionResult(
+        state: RecognitionState.error,
+        message: 'Recognition error: \$e',
+        pipelineSummary: pipelineLog.join(' -> '),
+        extractedText: extractedText,
+      );
+    }
+  }
+
+  /// Offline-only recognition path.
+  Future<RecognitionResult> _tryOfflineRecognition(
+    String imagePath,
+    List<String> pipelineLog,
+    String? extractedText,
+  ) async {
+    if (_offlineService == null || !_offlineService.isAvailable) {
+      return RecognitionResult(
+        state: RecognitionState.failed,
+        message: 'No internet and offline model not available. Download the model in Settings first.',
+        pipelineSummary: pipelineLog.join(' -> '),
+        extractedText: extractedText,
+      );
     }
 
-    // Nothing worked
-    return RecognitionPipelineResult(
-      bestResult: RecognitionResult(
-        confidence: _bestConfidence(pipelineResults),
-        source: 'none',
-        errorMessage: _buildErrorMessage(pipelineResults, textResult),
-      ),
-      allResults: [if (barcodeResult != null) barcodeResult],
-      pipeline: pipelineResults,
-      coverAnalysis: coverAnalysis,
+    final result = await _offlineService.recognize(imagePath);
+
+    if (result.recognized) {
+      final album = result.toAlbum(photoPath: imagePath);
+      return _success(
+        album: album,
+        confidence: result.confidence,
+        source: 'Offline (\${result.method})',
+        pipelineSummary: pipelineLog.join(' -> '),
+        extractedText: extractedText,
+      );
+    }
+
+    return RecognitionResult(
+      state: RecognitionState.failed,
+      message: 'Offline recognition could not identify this album.',
+      pipelineSummary: pipelineLog.join(' -> '),
       extractedText: extractedText,
     );
   }
 
-  /// Search by barcode (EAN/UPC).
-  Future<RecognitionResult?> _tryBarcodeRecognition(String imagePath) async {
-    final result = await _barcodeScanner.scanImage(imagePath);
-
-    if (!result.hasBarcode || !result.isAlbumBarcode) {
-      return null;
+  RecognitionResult _success({
+    required Album album,
+    required double confidence,
+    required String source,
+    required String pipelineSummary,
+    String? extractedText,
+  }) {
+    // If offline service is available, add to embedding index
+    if (_offlineService != null && album.userPhotoPath != null) {
+      _offlineService.addToIndex(album); // Fire-and-forget
     }
 
-    // Direct MusicBrainz lookup by barcode
-    try {
-      final releases = await _musicBrainz.searchByBarcode(result.barcode);
-      if (releases.isNotEmpty) {
-        final parsed = _musicBrainz.parseRelease(releases[0]);
-
-        // Try to get cover art
-        final mbid = parsed['musicBrainzId'] as String?;
-        String? coverUrl;
-        if (mbid != null) {
-          coverUrl = await _musicBrainz.getCoverArtUrl(mbid);
-        }
-
-        return RecognitionResult(
-          albumTitle: parsed['title'],
-          artist: parsed['artist'],
-          confidence: 0.95,
-          source: 'barcode',
-          rawApiData: {
-            ...parsed,
-            if (coverUrl != null) 'coverArtUrl': coverUrl,
-            'barcode': result.barcode,
-            'barcodeFormat': result.format,
-          },
-        );
-      }
-    } catch (_) {}
-
-    // Fallback: search Discogs by barcode
-    try {
-      final results = await _discogs.search(query: result.barcode);
-      if (results.isNotEmpty) {
-        final releaseId = int.tryParse(results[0]['id']?.toString() ?? '');
-        if (releaseId != null) {
-          final release = await _discogs.getRelease(releaseId);
-          if (release != null) {
-            final parsed = _discogs.parseRelease(release);
-            return RecognitionResult(
-              albumTitle: parsed['title'],
-              artist: parsed['artist'],
-              confidence: 0.90,
-              source: 'barcode',
-              rawApiData: {
-                ...parsed,
-                'barcode': result.barcode,
-              },
-            );
-          }
-        }
-      }
-    } catch (_) {}
-
-    return null;
-  }
-
-  /// Search MusicBrainz with query, fall back to Discogs.
-  Future<RecognitionResult> _searchWithFallback(String query) async {
-    // Try MusicBrainz first
-    try {
-      final releases = await _musicBrainz.searchRelease(query: query, limit: 3);
-      if (releases.isNotEmpty) {
-        final parsed = _musicBrainz.parseRelease(releases[0]);
-        final mbid = parsed['musicBrainzId'] as String?;
-
-        // Enrich with cover art
-        String? coverUrl;
-        if (mbid != null) {
-          coverUrl = await _musicBrainz.getCoverArtUrl(mbid);
-        }
-
-        // Enrich with full details if we have a match
-        Map<String, dynamic>? fullDetails;
-        if (mbid != null) {
-          fullDetails = await _musicBrainz.getReleaseDetails(mbid);
-        }
-
-        final tracklist = fullDetails != null
-            ? _extractTracklist(fullDetails)
-            : List<String>.from(parsed['tracklist'] ?? []);
-
-        return RecognitionResult(
-          albumTitle: parsed['title'],
-          artist: parsed['artist'],
-          confidence: _calculateMbConfidence(releases),
-          source: 'online',
-          rawApiData: {
-            ...parsed,
-            'tracklist': tracklist,
-            if (coverUrl != null) 'coverArtUrl': coverUrl,
-          },
-        );
-      }
-    } catch (_) {}
-
-    // Fallback to Discogs
-    try {
-      final results = await _discogs.search(query: query);
-      if (results.isNotEmpty) {
-        final releaseId = int.tryParse(results[0]['id']?.toString() ?? '');
-        if (releaseId != null) {
-          final release = await _discogs.getRelease(releaseId);
-          if (release != null) {
-            final parsed = _discogs.parseRelease(release);
-            return RecognitionResult(
-              albumTitle: parsed['title'],
-              artist: parsed['artist'],
-              confidence: 0.75,
-              source: 'online',
-              rawApiData: parsed,
-            );
-          }
-        }
-      }
-    } catch (_) {}
-
-    return const RecognitionResult(
-      confidence: 0,
-      source: 'online',
-      errorMessage: 'No results found',
-    );
-  }
-
-  /// Try visual label-assisted search.
-  Future<RecognitionResult?> _tryVisualSearch(
-    CoverAnalysis analysis,
-    ExtractedText textResult,
-  ) async {
-    // Combine visual labels with any text we found
-    final searchTerms = <String>[];
-
-    if (textResult.hasText) {
-      // Use text as primary, labels as secondary context
-      searchTerms.add(textResult.lines.first);
-    }
-
-    // Add genre hints from labels
-    if (analysis.detectedGenres.isNotEmpty) {
-      // This could help narrow down results in a future implementation
-    }
-
-    for (final term in searchTerms) {
-      final result = await _searchWithFallback(term);
-      if (result.isSuccess) {
-        return result;
-      }
-    }
-
-    return null;
-  }
-
-  /// Try offline TFLite model.
-  Future<RecognitionResult?> _tryOfflineRecognition(String imagePath) async {
-    if (!_offline.isModelLoaded) return null;
-
-    final result = await _offline.recognize(imagePath);
-    if (result == null) return null;
-
-    // Offline model gives us a label index + confidence
-    // In a full implementation, this would map to album data
     return RecognitionResult(
-      confidence: result.confidence,
-      source: 'offline',
+      state: RecognitionState.success,
+      album: album,
+      confidence: confidence,
+      source: source,
+      pipelineSummary: pipelineSummary,
+      extractedText: extractedText,
     );
   }
-
-  /// Extract tracklist from MusicBrainz release details.
-  List<String> _extractTracklist(Map<String, dynamic> details) {
-    final tracks = <String>[];
-    final media = details['media'] as List<dynamic>? ?? [];
-    for (final medium in media) {
-      final trackList = medium['tracks'] as List<dynamic>? ?? [];
-      for (final track in trackList) {
-        final recording = track['recording'];
-        tracks.add(recording?['title'] as String? ?? track['title'] as String? ?? '');
-      }
-    }
-    return tracks;
-  }
-
-  /// Calculate confidence based on MusicBrainz result quality.
-  double _calculateMbConfidence(List<Map<String, dynamic>> releases) {
-    if (releases.isEmpty) return 0;
-    if (releases.length == 1) return 0.85;
-
-    // Check if top results are similar (high confidence)
-    final firstTitle = releases[0]['title']?.toString().toLowerCase() ?? '';
-    int matches = 0;
-    for (int i = 1; i < releases.length && i < 3; i++) {
-      final title = releases[i]['title']?.toString().toLowerCase() ?? '';
-      if (title == firstTitle || firstTitle.contains(title) || title.contains(firstTitle)) {
-        matches++;
-      }
-    }
-
-    if (matches > 0) return 0.9;
-    return 0.8;
-  }
-
-  double _bestConfidence(List<RecognitionStep> steps) {
-    if (steps.isEmpty) return 0;
-    return steps.map((s) => s.confidence).reduce((a, b) => a > b ? a : b);
-  }
-
-  String _buildErrorMessage(List<RecognitionStep> steps, ExtractedText? text) {
-    final parts = <String>[];
-
-    if (text == null || !text.hasText) {
-      parts.add('No text found on cover');
-    } else {
-      parts.add('Text found but no matching albums');
-    }
-
-    final barcodeStep = steps.where((s) => s.name == 'Barcode Scan').firstOrNull;
-    if (barcodeStep != null && !barcodeStep.success) {
-      parts.add('No barcode detected');
-    }
-
-    parts.add('Try a clearer photo or search manually');
-    return parts.join('. ') + '.';
-  }
-
-  /// Quick search by artist + album name (for manual input).
-  Future<RecognitionResult> searchByQuery(String artist, String album) async {
-    final query = '\${artist.trim()} AND \${album.trim()}';
-    return _searchWithFallback(query);
-  }
-
-  /// Load the offline TFLite model.
-  Future<bool> loadOfflineModel() => _offline.loadModel();
-
-  /// Check if offline model is loaded.
-  bool get isOfflineModelLoaded => _offline.isModelLoaded;
-
-  void dispose() {
-    _offline.dispose();
-    _textExtractor.dispose();
-    _imageLabeler.dispose();
-    _barcodeScanner.dispose();
-  }
-}
-
-/// Tracks each step of the recognition pipeline.
-class RecognitionStep {
-  final String name;
-  final bool success;
-  final double confidence;
-
-  const RecognitionStep({
-    required this.name,
-    required this.success,
-    required this.confidence,
-  });
-}
-
-/// Complete result from the recognition pipeline.
-class RecognitionPipelineResult {
-  final RecognitionResult bestResult;
-  final List<RecognitionResult> allResults;
-  final List<RecognitionStep> pipeline;
-  final CoverAnalysis? coverAnalysis;
-  final ExtractedText? extractedText;
-
-  const RecognitionPipelineResult({
-    required this.bestResult,
-    required this.allResults,
-    required this.pipeline,
-    required this.coverAnalysis,
-    required this.extractedText,
-  });
-
-  /// How many pipeline steps were attempted.
-  int get stepsAttempted => pipeline.length;
-
-  /// How many pipeline steps succeeded.
-  int get stepsSucceeded => pipeline.where((s) => s.success).length;
-
-  /// Pipeline summary for debugging/display.
-  String get pipelineSummary =>
-      pipeline.map((s) => '\${s.name}: \${s.success ? "OK" : "FAIL"} (\${(s.confidence * 100).toInt()}%)').join(' -> ');
 }

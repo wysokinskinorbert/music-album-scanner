@@ -11,7 +11,7 @@
 - [x] Settings screen with export
 - [x] GitHub repository initialized
 
-## v0.2.0 - Core Recognition (Current)
+## v0.2.0 - Core Recognition
 - [x] Google ML Kit image labeling integration
 - [x] OCR text extraction from album covers
 - [x] Barcode/UPC scanning via camera
@@ -23,12 +23,19 @@
 - [x] Recognition pipeline visualization (step-by-step progress)
 - [x] Pipeline summary debug info
 
-## v0.3.0 - Offline Mode
-- [ ] TFLite model training/fine-tuning on album covers
-- [ ] Model download manager in app
-- [ ] On-device inference pipeline
-- [ ] Offline-to-online sync when connectivity returns
-- [ ] Model versioning and auto-updates
+## v0.3.0 - Offline Mode (Current)
+- [x] Model download manager (download, cache, verify, delete)
+- [x] TFLite inference service (MobileNet 224x224)
+- [x] Cover embedding generator (512-dim feature vectors)
+- [x] Offline embedding index (Hive-backed, up to 50K entries)
+- [x] Cosine similarity matching against indexed covers
+- [x] Offline-to-online sync service (enrich on reconnect)
+- [x] Model versioning and update checker
+- [x] Model download screen with progress UI
+- [x] Offline badge widget (scan screen status)
+- [x] Sync status bar widget (collection screen)
+- [x] Updated recognition pipeline with offline as step 5
+- [x] Updated settings with model management section
 
 ## v0.4.0 - Image Editing
 - [ ] In-app crop tool for album photos

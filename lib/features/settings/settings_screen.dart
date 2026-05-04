@@ -3,10 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/repositories/album_repository.dart';
+import '../../data/services/ml/model/model_download_manager.dart';
+import 'model_download_screen.dart';
 
 /// App settings and preferences.
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+  final ModelDownloadManager? downloadManager;
+
+  const SettingsScreen({super.key, this.downloadManager});
 
   @override
   Widget build(BuildContext context) {
@@ -74,18 +78,50 @@ class SettingsScreen extends StatelessWidget {
               const SizedBox(height: 24),
 
               // --- Offline Model Section ---
-              _buildSection('Offline Model', [
+              _buildSection('Offline Mode', [
+                _buildTile(
+                  icon: Icons.download_for_offline_outlined,
+                  title: 'Manage Models',
+                  subtitle: 'Download/remove offline recognition models',
+                  onTap: () {
+                    if (downloadManager != null) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ModelDownloadScreen(
+                            downloadManager: downloadManager!,
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                ),
                 _buildTile(
                   icon: Icons.offline_bolt_outlined,
                   title: 'Offline Recognition',
-                  subtitle: 'Download model for offline use (~15MB)',
-                  onTap: () => _showDownloadDialog(context),
+                  subtitle: downloadManager?.isOfflineReady == true
+                      ? 'Model ready - works without internet'
+                      : 'Download a model to enable offline use',
+                  trailing: Icon(
+                    downloadManager?.isOfflineReady == true
+                        ? Icons.check_circle
+                        : Icons.cloud_off,
+                    color: downloadManager?.isOfflineReady == true
+                        ? AppColors.success
+                        : AppColors.textTertiary,
+                    size: 20,
+                  ),
                 ),
                 _buildTile(
-                  icon: Icons.memory,
-                  title: 'Model Status',
-                  subtitle: 'Not downloaded',
-                  trailing: const Icon(Icons.cloud_download, color: AppColors.textTertiary),
+                  icon: Icons.sync,
+                  title: 'Offline Sync Queue',
+                  subtitle: '0 albums pending enrichment',
+                  trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+                ),
+                _buildTile(
+                  icon: Icons.storage_outlined,
+                  title: 'Embedding Index',
+                  subtitle: '0 covers indexed for offline matching',
+                  trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
                 ),
               ]),
               const SizedBox(height: 24),
@@ -128,14 +164,14 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () => _clearCollection(context),
                 ),
               ]),
-              const SizedBox(height: 24,
+              const SizedBox(height: 24),
 
               // --- About Section ---
               _buildSection('About', [
                 _buildTile(
                   icon: Icons.info_outline,
                   title: 'Version',
-                  subtitle: '0.2.0 (Core Recognition)',
+                  subtitle: '0.3.0 (Offline Mode)',
                 ),
                 _buildTile(
                   icon: Icons.code,
@@ -146,7 +182,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildTile(
                   icon: Icons.new_releases_outlined,
                   title: 'What\'s New',
-                  subtitle: 'v0.2.0: OCR, barcode, visual analysis, manual search',
+                  subtitle: 'v0.3.0: Offline recognition, model management, sync',
                   onTap: () => _showChangelog(context),
                 ),
               ]),
@@ -207,53 +243,6 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  void _showDownloadDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Download Offline Model'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'This will download a lightweight MobileNet model (~15MB) for offline album cover recognition.',
-            ),
-            SizedBox(height: 12),
-            Text(
-              'Works best for:',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            SizedBox(height: 4),
-            Text('- Major label releases'),
-            Text('- Popular album covers'),
-            Text('- Without internet connection'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Download started...'),
-                  backgroundColor: AppColors.info,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            child: const Text('Download'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showTokenDialog(BuildContext context) {
     final controller = TextEditingController();
     showDialog(
@@ -292,7 +281,6 @@ class SettingsScreen extends StatelessWidget {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              // TODO: Save token to storage
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Token saved!'),
@@ -312,41 +300,41 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: const Text('What\'s New in v0.2.0'),
+        title: const Text('What\'s New in v0.3.0'),
         content: const SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _ChangelogItem(
-                icon: Icons.text_fields,
-                title: 'OCR Text Extraction',
-                desc: 'Read artist names and album titles directly from covers',
+                icon: Icons.cloud_download,
+                title: 'Model Download Manager',
+                desc: 'Download and manage offline ML models in-app',
               ),
               _ChangelogItem(
-                icon: Icons.qr_code,
-                title: 'Barcode Scanning',
-                desc: 'Scan EAN-13 and UPC-A barcodes for instant lookup',
+                icon: Icons.offline_bolt,
+                title: 'On-Device Recognition',
+                desc: 'TFLite MobileNet for offline album identification',
               ),
               _ChangelogItem(
-                icon: Icons.auto_awesome,
-                title: 'Visual Analysis',
-                desc: 'Identify artistic covers using Google ML Kit labeling',
+                icon: Icons.fingerprint,
+                title: 'Cover Embedding Index',
+                desc: 'Build a personal index for similarity matching',
               ),
               _ChangelogItem(
-                icon: Icons.route,
-                title: 'Recognition Pipeline',
-                desc: 'Multi-step: Barcode -> OCR -> Visual -> Offline',
+                icon: Icons.sync,
+                title: 'Offline-to-Online Sync',
+                desc: 'Auto-enrich offline matches when connectivity returns',
               ),
               _ChangelogItem(
-                icon: Icons.image,
-                title: 'Cover Art Archive',
-                desc: 'Auto-fetch album artwork from MusicBrainz',
+                icon: Icons.update,
+                title: 'Model Versioning',
+                desc: 'Auto-check for model updates and version management',
               ),
               _ChangelogItem(
-                icon: Icons.search,
-                title: 'Manual Search',
-                desc: 'Search by artist + album when scan doesn\'t work',
+                icon: Icons.cloud_off,
+                title: 'Offline Badge',
+                desc: 'Visual indicator of offline model status in scan screen',
               ),
             ],
           ),
