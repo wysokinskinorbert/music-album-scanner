@@ -1,51 +1,52 @@
-import 'package:dio/dio.dart';
-import '../constants/app_constants.dart';
-
-/// Centralized HTTP client with rate limiting and error handling.
-class ApiClient {
-  late final Dio _dio;
-
-  ApiClient() {
-    _dio = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 15),
-      headers: {
-        'User-Agent': '${AppConstants.appName}/${AppConstants.appVersion}',
-        'Accept': 'application/json',
-      },
-    ));
-
-    _dio.interceptors.add(LogInterceptor(
-      requestBody: false,
-      responseBody: false,
-    ));
-  }
-
-  /// GET request with retry logic.
-  Future<Response<T>> get<T>(
-    String url, {
-    Map<String, dynamic>? queryParameters,
-    int retryCount = 2,
-  }) async {
-    Exception? lastException;
-    for (var i = 0; i <= retryCount; i++) {
-      try {
-        // MusicBrainz rate limiting
-        if (url.contains('musicbrainz.org')) {
-          await Future.delayed(AppConstants.musicBrainzRateLimit);
-        }
-        return await _dio.get<T>(url, queryParameters: queryParameters);
-      } on DioException catch (e) {
-        lastException = e;
-        if (e.type == DioExceptionType.tooManyRequests) {
-          await Future.delayed(Duration(seconds: 2 * (i + 1)));
-          continue;
-        }
-        rethrow;
-      }
-    }
-    throw lastException!;
-  }
-
-  Dio get rawDio => _dio;
-}
+     1|import 'package:dio/dio.dart';
+     2|import '../constants/app_constants.dart';
+     3|
+     4|/// Centralized HTTP client with rate limiting and error handling.
+     5|class ApiClient {
+     6|  late final Dio _dio;
+     7|
+     8|  ApiClient() {
+     9|    _dio = Dio(BaseOptions(
+    10|      connectTimeout: const Duration(seconds: 10),
+    11|      receiveTimeout: const Duration(seconds: 15),
+    12|      headers: {
+    13|        'User-Agent': '${AppConstants.appName}/${AppConstants.appVersion}',
+    14|        'Accept': 'application/json',
+    15|      },
+    16|    ));
+    17|
+    18|    _dio.interceptors.add(LogInterceptor(
+    19|      requestBody: false,
+    20|      responseBody: false,
+    21|    ));
+    22|  }
+    23|
+    24|  /// GET request with retry logic.
+    25|  Future<Response<T>> get<T>(
+    26|    String url, {
+    27|    Map<String, dynamic>? queryParameters,
+    28|    int retryCount = 2,
+    29|  }) async {
+    30|    Exception? lastException;
+    31|    for (var i = 0; i <= retryCount; i++) {
+    32|      try {
+    33|        // MusicBrainz rate limiting
+    34|        if (url.contains('musicbrainz.org')) {
+    35|          await Future.delayed(AppConstants.musicBrainzRateLimit);
+    36|        }
+    37|        return await _dio.get<T>(url, queryParameters: queryParameters);
+    38|      } on DioException catch (e) {
+    39|        lastException = e;
+    40|        if (e.type == DioExceptionType.connectionError) {
+    41|          await Future.delayed(Duration(seconds: 2 * (i + 1)));
+    42|          continue;
+    43|        }
+    44|        rethrow;
+    45|      }
+    46|    }
+    47|    throw lastException!;
+    48|  }
+    49|
+    50|  Dio get rawDio => _dio;
+    51|}
+    52|

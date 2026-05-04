@@ -165,9 +165,9 @@ class RecognitionService {
       completed++;
 
       // STEP 5: Offline
-      if (_offlineService != null && _offlineService.isAvailable) {
+      if (_offlineService != null && _offlineService?.isAvailable ?? false) {
         progress('Trying offline recognition...');
-        final offlineResult = await _offlineService.recognize(imagePath);
+        final offlineResult = await _offlineService?.recognize(imagePath);
 
         if (offlineResult.recognized && offlineResult.confidence >= 0.50) {
           final album = offlineResult.toAlbum(photoPath: imagePath);
@@ -250,7 +250,7 @@ class RecognitionService {
     List<String> pipelineLog,
     String? extractedText,
   ) async {
-    if (_offlineService == null || !_offlineService.isAvailable) {
+    if (_offlineService == null || !_offlineService?.isAvailable ?? false) {
       return RecognitionResult(
         state: RecognitionState.failed,
         message: 'No internet and offline model not available.',
@@ -259,7 +259,7 @@ class RecognitionService {
       );
     }
 
-    final result = await _offlineService.recognize(imagePath);
+    final result = await _offlineService?.recognize(imagePath);
 
     if (result.recognized) {
       final album = result.toAlbum(photoPath: imagePath);
@@ -288,7 +288,7 @@ class RecognitionService {
     String? extractedText,
   }) {
     if (_offlineService != null && album.userPhotoPath != null) {
-      _offlineService.addToIndex(album);
+      _offlineService?.addToIndex(album);
     }
 
     return RecognitionResult(
