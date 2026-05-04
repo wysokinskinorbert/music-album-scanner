@@ -23,7 +23,7 @@
 - [x] Recognition pipeline visualization (step-by-step progress)
 - [x] Pipeline summary debug info
 
-## v0.3.0 - Offline Mode (Current)
+## v0.3.0 - Offline Mode
 - [x] Model download manager (download, cache, verify, delete)
 - [x] TFLite inference service (MobileNet 224x224)
 - [x] Cover embedding generator (512-dim feature vectors)
@@ -37,11 +37,20 @@
 - [x] Updated recognition pipeline with offline as step 5
 - [x] Updated settings with model management section
 
-## v0.4.0 - Image Editing
-- [ ] In-app crop tool for album photos
-- [ ] Auto-enhancement (brightness, contrast for covers)
-- [ ] Perspective correction for angled shots
-- [ ] Photo comparison (original vs. enhanced)
+## v0.4.0 - Image Editing (Current)
+- [x] Image editor service (crop, rotate, flip, brightness, contrast, saturation, gamma)
+- [x] Perspective correction with auto-detect corners + bilinear warp
+- [x] Auto-enhancement (7 modes: auto, vivid, warm, cool, vintage, highContrast, lowLight)
+- [x] Image analysis stats (brightness, contrast, dynamic range)
+- [x] OCR-optimized enhancement (grayscale + threshold + sharpen)
+- [x] ML-optimized enhancement (normalize + contrast + saturation + sharpen)
+- [x] Sepia and grayscale filters
+- [x] Interactive image editor screen with 5 modes (Crop, Adjust, Filters, Perspective, Enhance)
+- [x] Undo/redo history (10 steps)
+- [x] Reset to original
+- [x] Before/after comparison screen with interactive slider
+- [x] Edit preview screen in scan flow (Edit -> Enhance -> Scan)
+- [x] Gallery picker goes through edit preview
 
 ## v0.5.0 - Collection Management
 - [ ] Sort collection (by date, artist, year, genre)

@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/theme/app_colors.dart';
 import 'bloc/camera_bloc.dart';
 import '../scan_result/scan_result_screen.dart';
+import '../scan_result/edit_preview_screen.dart';
 import '../scan_result/manual_search_screen.dart';
 
 /// Camera screen for album scanning - optimized for one-handed use.
@@ -30,7 +31,7 @@ class _ScanScreenState extends State<ScanScreen> {
           if (state is CameraCaptureSuccess) {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => ScanResultScreen(imagePath: state.imagePath),
+                builder: (_) => EditPreviewScreen(imagePath: state.imagePath),
               ),
             );
           }
@@ -300,7 +301,7 @@ class _ScanScreenState extends State<ScanScreen> {
     if (image != null && mounted) {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => ScanResultScreen(imagePath: image.path),
+          builder: (_) => EditPreviewScreen(imagePath: image.path),
         ),
       );
     }
