@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/services/haptic_service.dart';
 import '../collection/collection_screen.dart';
 import '../camera/scan_screen.dart';
 import '../settings/settings_screen.dart';
@@ -31,30 +32,51 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
+          color: AppColors.surface,
           border: Border(top: BorderSide(color: AppColors.border, width: 0.5)),
         ),
         child: NavigationBar(
           selectedIndex: _currentIndex,
           onDestinationSelected: (index) {
+            if (index != _currentIndex) {
+              HapticService.selection();
+            }
             setState(() => _currentIndex = index);
           },
-          backgroundColor: AppColors.surface,
-          indicatorColor: AppColors.primary.withOpacity(0.2),
-          height: 72,
-          destinations: const [
+          backgroundColor: Colors.transparent,
+          indicatorColor: AppColors.primary.withOpacity(0.15),
+          height: 64,
+          destinations: [
             NavigationDestination(
-              icon: Icon(Icons.album_outlined),
-              selectedIcon: Icon(Icons.album),
+              icon: Badge(
+                isLabelVisible: false,
+                child: Icon(Icons.album_outlined, color: _currentIndex == 0 ? AppColors.primary : AppColors.textTertiary),
+              ),
+              selectedIcon: Icon(Icons.album, color: AppColors.primary),
               label: 'Collection',
             ),
             NavigationDestination(
-              icon: Icon(Icons.qr_code_scanner_outlined),
-              selectedIcon: Icon(Icons.qr_code_scanner),
+              icon: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: _currentIndex == 1
+                      ? const LinearGradient(colors: [AppColors.primary, AppColors.primaryLight])
+                      : null,
+                  color: _currentIndex == 1 ? null : AppColors.surfaceLight,
+                ),
+                child: Icon(
+                  Icons.camera_alt,
+                  color: _currentIndex == 1 ? Colors.white : AppColors.textTertiary,
+                  size: 18,
+                ),
+              ),
               label: 'Scan',
             ),
             NavigationDestination(
-              icon: Icon(Icons.settings_outlined),
-              selectedIcon: Icon(Icons.settings),
+              icon: Icon(Icons.settings_outlined, color: _currentIndex == 2 ? AppColors.primary : AppColors.textTertiary),
+              selectedIcon: Icon(Icons.settings, color: AppColors.primary),
               label: 'Settings',
             ),
           ],
