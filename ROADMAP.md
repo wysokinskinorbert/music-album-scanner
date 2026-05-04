@@ -49,7 +49,7 @@
 - [x] Wishlist (add/remove/mark found/manual input)
 - [x] Filter/Sort bottom sheet + grid/list toggle
 
-## v0.6.0 - Polish & UX (Current)
+## v0.6.0 - Polish & UX
 - [x] Haptic feedback service (15+ events: scan, camera, duplicate, swipe, export)
 - [x] Animated page transitions (shared axis horizontal/vertical/scaled, fade through)
 - [x] Container transform for album card -> detail
@@ -59,19 +59,22 @@
 - [x] Search suggestions service (Hive-backed, 50 entries max)
 - [x] Search bar widget with recent searches dropdown
 - [x] Swipe action wrapper (delete left, share/favorite right)
-- [x] Animated success indicator (elastic scale + checkmark draw)
-- [x] Animated fail indicator (elastic scale + rotation)
-- [x] Animated scan pulse (breathing circle)
-- [x] Skeleton loading states (album card, list item, grid, stats, pipeline)
-- [x] Updated main.dart with onboarding check + haptic init
+- [x] Animated success/fail/scan indicators
+- [x] Skeleton loading states (album card, list, grid, stats, pipeline)
+- [x] Updated main.dart with onboarding gate + haptic init
 - [x] Updated home screen with polished nav bar (gradient scan button)
 
-## v0.7.0 - Sharing & Social
-- [ ] Share album to Instagram stories format
-- [ ] Generate collection infographic
-- [ ] Export to CSV / PDF
-- [ ] Import from Discogs collection
-- [ ] Import from MusicBrainz collection
+## v0.7.0 - Sharing & Social (Current)
+- [x] Share service (text, text+image, album list, widget as image, copy to clipboard)
+- [x] Instagram Stories format generator (1080x1920, gradient overlay, album cover, branding)
+- [x] Collection infographic generator (stats visual as 1080x1920 PNG)
+- [x] Export service (JSON with metadata, CSV with headers, PDF with album rows)
+- [x] Import service (Discogs CSV, MusicBrainz JSON, generic JSON)
+- [x] Duplicate detection during import (artist+title matching)
+- [x] Share/Export screen (3 tabs: Share, Instagram, Export)
+- [x] Import screen (format picker, file picker, progress, result stats)
+- [x] Settings: Share & Export link + Import Collection link
+- [x] Updated version strings
 
 ## v0.8.0 - Cloud Sync (Optional)
 - [ ] Firebase / Supabase integration

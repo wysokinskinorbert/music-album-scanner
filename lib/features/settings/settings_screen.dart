@@ -4,6 +4,8 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/repositories/album_repository.dart';
 import '../../data/services/ml/model/model_download_manager.dart';
+import '../import_export/import_screen.dart';
+import '../sharing/share_export_screen.dart';
 import 'model_download_screen.dart';
 
 /// App settings and preferences.
@@ -152,10 +154,24 @@ class SettingsScreen extends StatelessWidget {
               // --- Data Section ---
               _buildSection('Data', [
                 _buildTile(
-                  icon: Icons.download_outlined,
-                  title: 'Export Collection',
-                  subtitle: 'Share as JSON file',
-                  onTap: () => _exportCollection(context),
+                  icon: Icons.share_outlined,
+                  title: 'Share & Export',
+                  subtitle: 'Share albums, export JSON/CSV/PDF, Instagram Stories',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ShareExportScreen()),
+                    );
+                  },
+                ),
+                _buildTile(
+                  icon: Icons.file_download_outlined,
+                  title: 'Import Collection',
+                  subtitle: 'Import from Discogs CSV, MusicBrainz, or JSON',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ImportScreen()),
+                    );
+                  },
                 ),
                 _buildTile(
                   icon: Icons.delete_outline,
@@ -171,7 +187,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildTile(
                   icon: Icons.info_outline,
                   title: 'Version',
-                  subtitle: '0.3.0 (Offline Mode)',
+                  subtitle: '0.7.0 (Sharing & Social)',
                 ),
                 _buildTile(
                   icon: Icons.code,
@@ -182,7 +198,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildTile(
                   icon: Icons.new_releases_outlined,
                   title: 'What\'s New',
-                  subtitle: 'v0.3.0: Offline recognition, model management, sync',
+                  subtitle: 'v0.7.0: Share, Instagram Stories, Infographic, Export CSV/PDF, Import Discogs/MusicBrainz',
                   onTap: () => _showChangelog(context),
                 ),
               ]),
