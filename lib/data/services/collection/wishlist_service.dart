@@ -1,5 +1,5 @@
 import 'package:hive/hive.dart';
-import '../../data/models/album_model.dart';
+import '../../models/album_model.dart';
 import 'package:logger/logger.dart';
 
 /// Wishlist entry - an album the user wants to find.

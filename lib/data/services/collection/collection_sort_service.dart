@@ -1,4 +1,4 @@
-import '../../data/models/album_model.dart';
+import '../../models/album_model.dart';
 
 /// Sort options for the album collection.
 enum SortField {

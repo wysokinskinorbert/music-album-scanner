@@ -1,4 +1,4 @@
-import '../../data/models/album_model.dart';
+import '../../models/album_model.dart';
 
 /// Statistics about a user's album collection.
 class CollectionStats {

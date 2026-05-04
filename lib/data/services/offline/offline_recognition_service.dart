@@ -3,7 +3,7 @@ import '../ml/model/model_download_manager.dart';
 import '../ml/model/model_info.dart';
 import '../ml/tflite_inference_service.dart';
 import '../ml/cover_embedding_service.dart';
-import '../../data/models/album_model.dart';
+import '../../models/album_model.dart';
 import 'package:logger/logger.dart';
 
 /// Result from offline recognition attempt.
