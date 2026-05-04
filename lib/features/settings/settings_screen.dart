@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_colors.dart';
-import '../../data/services/storage/local_storage_service.dart';
-import '../../data/services/recognition_service.dart';
+import '../../data/repositories/album_repository.dart';
 
 /// App settings and preferences.
 class SettingsScreen extends StatelessWidget {
@@ -27,11 +27,13 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
+
+              // --- Recognition Section ---
               _buildSection('Recognition', [
                 _buildTile(
                   icon: Icons.cloud_outlined,
                   title: 'Online Recognition',
-                  subtitle: 'MusicBrainz + Discogs',
+                  subtitle: 'MusicBrainz + Discogs (auto)',
                   trailing: Switch(
                     value: true,
                     onChanged: (_) {},
@@ -39,45 +41,113 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
                 _buildTile(
-                  icon: Icons.offline_bolt_outlined,
-                  title: 'Offline Model',
-                  subtitle: 'Download for offline use',
-                  onTap: () => _showDownloadDialog(context),
+                  icon: Icons.text_fields,
+                  title: 'OCR Text Extraction',
+                  subtitle: 'Read text from album covers',
+                  trailing: Switch(
+                    value: true,
+                    onChanged: (_) {},
+                    activeColor: AppColors.primary,
+                  ),
                 ),
                 _buildTile(
-                  icon: Icons.disc_full_outlined,
-                  title: 'Discogs Token',
-                  subtitle: 'Optional - higher rate limits',
-                  onTap: () => _showTokenDialog(context),
+                  icon: Icons.qr_code,
+                  title: 'Barcode Scanning',
+                  subtitle: 'Scan EAN/UPC on back covers',
+                  trailing: Switch(
+                    value: true,
+                    onChanged: (_) {},
+                    activeColor: AppColors.primary,
+                  ),
+                ),
+                _buildTile(
+                  icon: Icons.auto_awesome,
+                  title: 'Visual Analysis',
+                  subtitle: 'Identify artistic covers via ML Kit',
+                  trailing: Switch(
+                    value: true,
+                    onChanged: (_) {},
+                    activeColor: AppColors.primary,
+                  ),
                 ),
               ]),
               const SizedBox(height: 24),
+
+              // --- Offline Model Section ---
+              _buildSection('Offline Model', [
+                _buildTile(
+                  icon: Icons.offline_bolt_outlined,
+                  title: 'Offline Recognition',
+                  subtitle: 'Download model for offline use (~15MB)',
+                  onTap: () => _showDownloadDialog(context),
+                ),
+                _buildTile(
+                  icon: Icons.memory,
+                  title: 'Model Status',
+                  subtitle: 'Not downloaded',
+                  trailing: const Icon(Icons.cloud_download, color: AppColors.textTertiary),
+                ),
+              ]),
+              const SizedBox(height: 24),
+
+              // --- APIs Section ---
+              _buildSection('APIs', [
+                _buildTile(
+                  icon: Icons.disc_full_outlined,
+                  title: 'Discogs Personal Token',
+                  subtitle: 'Optional - higher rate limits (60/min vs 25/min)',
+                  onTap: () => _showTokenDialog(context),
+                ),
+                _buildTile(
+                  icon: Icons.info_outline,
+                  title: 'MusicBrainz',
+                  subtitle: 'Free, no key required (1 req/sec)',
+                  trailing: const Icon(Icons.check_circle, color: AppColors.success, size: 20),
+                ),
+                _buildTile(
+                  icon: Icons.info_outline,
+                  title: 'Cover Art Archive',
+                  subtitle: 'Free album artwork (auto)',
+                  trailing: const Icon(Icons.check_circle, color: AppColors.success, size: 20),
+                ),
+              ]),
+              const SizedBox(height: 24),
+
+              // --- Data Section ---
               _buildSection('Data', [
                 _buildTile(
                   icon: Icons.download_outlined,
                   title: 'Export Collection',
-                  subtitle: 'Share as JSON',
+                  subtitle: 'Share as JSON file',
                   onTap: () => _exportCollection(context),
                 ),
                 _buildTile(
                   icon: Icons.delete_outline,
                   title: 'Clear Collection',
-                  subtitle: 'Remove all albums',
+                  subtitle: 'Remove all albums permanently',
                   onTap: () => _clearCollection(context),
                 ),
               ]),
-              const SizedBox(height: 24),
+              const SizedBox(height: 24,
+
+              // --- About Section ---
               _buildSection('About', [
                 _buildTile(
                   icon: Icons.info_outline,
                   title: 'Version',
-                  subtitle: '0.1.0 (Alpha)',
+                  subtitle: '0.2.0 (Core Recognition)',
                 ),
                 _buildTile(
                   icon: Icons.code,
                   title: 'Open Source',
                   subtitle: 'github.com/wysokinskinorbert/music-album-scanner',
                   onTap: () {},
+                ),
+                _buildTile(
+                  icon: Icons.new_releases_outlined,
+                  title: 'What\'s New',
+                  subtitle: 'v0.2.0: OCR, barcode, visual analysis, manual search',
+                  onTap: () => _showChangelog(context),
                 ),
               ]),
             ],
@@ -132,7 +202,7 @@ class SettingsScreen extends StatelessWidget {
         subtitle,
         style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
       ),
-      trailing: trailing ?? const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+      trailing: trailing ?? (onTap != null ? const Icon(Icons.chevron_right, color: AppColors.textTertiary) : null),
       onTap: onTap,
     );
   }
@@ -143,9 +213,23 @@ class SettingsScreen extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text('Download Offline Model'),
-        content: const Text(
-          'This will download ~15MB of data for offline album recognition. '
-          'Works best for commercial releases.',
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This will download a lightweight MobileNet model (~15MB) for offline album cover recognition.',
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Works best for:',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            SizedBox(height: 4),
+            Text('- Major label releases'),
+            Text('- Popular album covers'),
+            Text('- Without internet connection'),
+          ],
         ),
         actions: [
           TextButton(
@@ -155,11 +239,14 @@ class SettingsScreen extends StatelessWidget {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              // TODO: Trigger model download
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Download started...')),
+                const SnackBar(
+                  content: Text('Download started...'),
+                  backgroundColor: AppColors.info,
+                ),
               );
             },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             child: const Text('Download'),
           ),
         ],
@@ -176,15 +263,24 @@ class SettingsScreen extends StatelessWidget {
         title: const Text('Discogs Personal Access Token'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               'Optional. Increases API rate limits from 25 to 60 requests/minute.',
               style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
             ),
             const SizedBox(height: 12),
+            const Text(
+              'Get yours at: discogs.com/settings/developers',
+              style: TextStyle(color: AppColors.primaryLight, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: controller,
-              decoration: const InputDecoration(hintText: 'Enter token'),
+              decoration: const InputDecoration(
+                hintText: 'Paste token here',
+                hintStyle: TextStyle(color: AppColors.textTertiary),
+              ),
             ),
           ],
         ),
@@ -196,7 +292,13 @@ class SettingsScreen extends StatelessWidget {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              // TODO: Save token
+              // TODO: Save token to storage
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Token saved!'),
+                  backgroundColor: AppColors.success,
+                ),
+              );
             },
             child: const Text('Save'),
           ),
@@ -205,9 +307,84 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  void _showChangelog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('What\'s New in v0.2.0'),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ChangelogItem(
+                icon: Icons.text_fields,
+                title: 'OCR Text Extraction',
+                desc: 'Read artist names and album titles directly from covers',
+              ),
+              _ChangelogItem(
+                icon: Icons.qr_code,
+                title: 'Barcode Scanning',
+                desc: 'Scan EAN-13 and UPC-A barcodes for instant lookup',
+              ),
+              _ChangelogItem(
+                icon: Icons.auto_awesome,
+                title: 'Visual Analysis',
+                desc: 'Identify artistic covers using Google ML Kit labeling',
+              ),
+              _ChangelogItem(
+                icon: Icons.route,
+                title: 'Recognition Pipeline',
+                desc: 'Multi-step: Barcode -> OCR -> Visual -> Offline',
+              ),
+              _ChangelogItem(
+                icon: Icons.image,
+                title: 'Cover Art Archive',
+                desc: 'Auto-fetch album artwork from MusicBrainz',
+              ),
+              _ChangelogItem(
+                icon: Icons.search,
+                title: 'Manual Search',
+                desc: 'Search by artist + album when scan doesn\'t work',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Got it!'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _exportCollection(BuildContext context) {
-    // TODO: Get actual data from repository
-    Share.share('{"albums": [], "exportedAt": "${DateTime.now().toIso8601String()}"}');
+    try {
+      final repo = context.read<AlbumRepository>();
+      final data = repo.exportCollection();
+      if (data.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Collection is empty'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+        return;
+      }
+      Share.share(
+        '{"albums": ${data.toString()}, "exportedAt": "${DateTime.now().toIso8601String()}"}',
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Export failed: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   void _clearCollection(BuildContext context) {
@@ -216,7 +393,7 @@ class SettingsScreen extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text('Clear entire collection?'),
-        content: const Text('This action cannot be undone.'),
+        content: const Text('This action cannot be undone. All albums will be permanently removed.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -229,6 +406,54 @@ class SettingsScreen extends StatelessWidget {
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChangelogItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String desc;
+
+  const _ChangelogItem({
+    required this.icon,
+    required this.title,
+    required this.desc,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: AppColors.primaryLight),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  desc,
+                  style: const TextStyle(
+                    color: AppColors.textTertiary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

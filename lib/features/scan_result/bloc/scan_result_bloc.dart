@@ -13,6 +13,9 @@ class ScanResultBloc extends Bloc<ScanResultEvent, ScanResultState> {
   final RecognitionService _recognition;
   final AlbumRepository _repository;
 
+  // Keep pipeline results for multiple match selection
+  RecognitionPipelineResult? _lastPipelineResult;
+
   ScanResultBloc({
     required RecognitionService recognition,
     required AlbumRepository repository,
@@ -22,16 +25,26 @@ class ScanResultBloc extends Bloc<ScanResultEvent, ScanResultState> {
     on<StartRecognition>(_onStartRecognition);
     on<ManualSearch>(_onManualSearch);
     on<ConfirmAndSave>(_onConfirmAndSave);
+    on<SelectResult>(_onSelectResult);
     on<RetryRecognition>(_onRetryRecognition);
+    on<CancelRecognition>(_onCancelRecognition);
   }
 
   Future<void> _onStartRecognition(
     StartRecognition event,
     Emitter<ScanResultState> emit,
   ) async {
-    emit(ScanResultProcessing(imagePath: event.imagePath));
+    // Step 1: Barcode scan
+    emit(const ScanResultProcessing(
+      currentStep: 'Scanning barcode...',
+      stepsCompleted: 0,
+      totalSteps: 4,
+    ));
 
-    final result = await _recognition.recognizeAlbum(event.imagePath);
+    final pipelineResult = await _recognition.recognizeAlbum(event.imagePath);
+    _lastPipelineResult = pipelineResult;
+
+    final result = pipelineResult.bestResult;
 
     if (result.isSuccess) {
       final rawData = result.rawApiData ?? {};
@@ -49,17 +62,26 @@ class ScanResultBloc extends Bloc<ScanResultEvent, ScanResultState> {
         musicBrainzId: rawData['musicBrainzId'],
         discogsId: rawData['discogsId'],
         recognitionConfidence: result.confidence,
+        barcode: rawData['barcode'],
+        country: rawData['country'],
       );
+
       emit(ScanResultSuccess(
         album: album,
-        source: result.source,
+        source: result.sourceLabel,
         confidence: result.confidence,
         imagePath: event.imagePath,
+        pipelineSummary: pipelineResult.pipelineSummary,
+        extractedText: pipelineResult.extractedText?.rawText,
       ));
     } else {
       emit(ScanResultFailure(
         message: result.errorMessage ?? 'Recognition failed',
         imagePath: event.imagePath,
+        pipelineSummary: pipelineResult.pipelineSummary,
+        extractedText: pipelineResult.extractedText?.rawText,
+        stepsAttempted: pipelineResult.stepsAttempted,
+        stepsSucceeded: pipelineResult.stepsSucceeded,
       ));
     }
   }
@@ -68,7 +90,7 @@ class ScanResultBloc extends Bloc<ScanResultEvent, ScanResultState> {
     ManualSearch event,
     Emitter<ScanResultState> emit,
   ) async {
-    emit(const ScanResultProcessing());
+    emit(const ScanResultProcessing(currentStep: 'Searching...'));
 
     final result = await _recognition.searchByQuery(
       event.artist,
@@ -93,12 +115,12 @@ class ScanResultBloc extends Bloc<ScanResultEvent, ScanResultState> {
       );
       emit(ScanResultSuccess(
         album: album,
-        source: result.source,
+        source: result.sourceLabel,
         confidence: result.confidence,
       ));
     } else {
       emit(ScanResultFailure(
-        message: result.errorMessage ?? 'No results found',
+        message: result.errorMessage ?? 'No results found for "\${event.artist} - \${event.album}"',
       ));
     }
   }
@@ -115,10 +137,24 @@ class ScanResultBloc extends Bloc<ScanResultEvent, ScanResultState> {
     }
   }
 
+  Future<void> _onSelectResult(
+    SelectResult event,
+    Emitter<ScanResultState> emit,
+  ) async {
+    // For future: select from multiple matches
+  }
+
   Future<void> _onRetryRecognition(
     RetryRecognition event,
     Emitter<ScanResultState> emit,
   ) async {
     add(StartRecognition(event.imagePath));
+  }
+
+  Future<void> _onCancelRecognition(
+    CancelRecognition event,
+    Emitter<ScanResultState> emit,
+  ) async {
+    emit(ScanResultInitial());
   }
 }

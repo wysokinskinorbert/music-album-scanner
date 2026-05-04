@@ -6,7 +6,7 @@ abstract class ScanResultEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-/// Start recognition on a captured image.
+/// Start full recognition pipeline on a captured image.
 class StartRecognition extends ScanResultEvent {
   final String imagePath;
   const StartRecognition(this.imagePath);
@@ -23,7 +23,7 @@ class ManualSearch extends ScanResultEvent {
   List<Object?> get props => [artist, album];
 }
 
-/// Confirm and save the recognized album.
+/// Confirm and save the recognized album to collection.
 class ConfirmAndSave extends ScanResultEvent {
   final Album album;
   const ConfirmAndSave(this.album);
@@ -31,26 +31,21 @@ class ConfirmAndSave extends ScanResultEvent {
   List<Object?> get props => [album];
 }
 
-/// Edit recognized data before saving.
-class EditRecognizedData extends ScanResultEvent {
-  final String? title;
-  final String? artist;
-  final int? releaseYear;
-  final String? genre;
-  final String? label;
-  const EditRecognizedData({
-    this.title,
-    this.artist,
-    this.releaseYear,
-    this.genre,
-    this.label,
-  });
+/// Select one result from multiple matches.
+class SelectResult extends ScanResultEvent {
+  final int index;
+  const SelectResult(this.index);
+  @override
+  List<Object?> get props => [index];
 }
 
-/// Retry recognition.
+/// Retry recognition (restart the pipeline).
 class RetryRecognition extends ScanResultEvent {
   final String imagePath;
   const RetryRecognition(this.imagePath);
   @override
   List<Object?> get props => [imagePath];
 }
+
+/// Cancel recognition and go back.
+class CancelRecognition extends ScanResultEvent {}

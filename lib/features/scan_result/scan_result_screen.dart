@@ -2,11 +2,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/constants/app_constants.dart';
 import '../../data/models/album_model.dart';
 import 'bloc/scan_result_bloc.dart';
+import 'manual_search_screen.dart';
 
-/// Displays recognition results and allows confirmation/editing.
+/// Displays recognition results with pipeline visualization.
 class ScanResultScreen extends StatefulWidget {
   final String imagePath;
 
@@ -16,14 +16,27 @@ class ScanResultScreen extends StatefulWidget {
   State<ScanResultScreen> createState() => _ScanResultScreenState();
 }
 
-class _ScanResultScreenState extends State<ScanResultScreen> {
+class _ScanResultScreenState extends State<ScanResultScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
     // Auto-start recognition
     Future.microtask(() {
       context.read<ScanResultBloc>().add(StartRecognition(widget.imagePath));
     });
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
   }
 
   @override
@@ -33,7 +46,10 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            context.read<ScanResultBloc>().add(CancelRecognition());
+            Navigator.of(context).pop();
+          },
         ),
         title: const Text('Recognition'),
       ),
@@ -44,90 +60,181 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
               SnackBar(
                 content: Text('"${state.album.title}" added to collection!'),
                 backgroundColor: AppColors.success,
+                behavior: SnackBarBehavior.floating,
               ),
             );
             Navigator.of(context).pop();
           }
         },
         builder: (context, state) {
-          return switch (state) {
-            ScanResultProcessing() => _buildProcessing(),
-            ScanResultSuccess() => _buildResult(state.album, state.confidence, state.source),
-            ScanResultFailure() => _buildFailure(state.message),
-            ScanResultSaved() => _buildProcessing(),
-            _ => _buildProcessing(),
-          };
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: switch (state) {
+              ScanResultProcessing() => _buildProcessing(state),
+              ScanResultSuccess() => _buildResult(state),
+              ScanResultFailure() => _buildFailure(state),
+              ScanResultSaved() => _buildProcessing(
+                  const ScanResultProcessing(currentStep: 'Saving...')),
+              _ => _buildProcessing(
+                  const ScanResultProcessing(currentStep: 'Starting...')),
+            },
+          );
         },
       ),
     );
   }
 
-  Widget _buildProcessing() {
+  // ==========================================
+  // Processing State
+  // ==========================================
+
+  Widget _buildProcessing(ScanResultProcessing state) {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Show captured image
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Image.file(
-              File(widget.imagePath),
-              width: 200,
-              height: 200,
-              fit: BoxFit.cover,
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Photo with scanning animation
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.file(
+                    File(widget.imagePath),
+                    width: 220,
+                    height: 220,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                // Scanning overlay
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    return Container(
+                      width: 220,
+                      height: 220,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppColors.primary
+                              .withOpacity(0.5 + 0.5 * _pulseController.value),
+                          width: 2,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 32),
-          const CircularProgressIndicator(color: AppColors.primary),
-          const SizedBox(height: 16),
-          const Text(
-            'Analyzing album cover...',
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 16,
+            const SizedBox(height: 32),
+
+            // Progress indicator
+            if (state.totalSteps > 0) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: state.progress,
+                  backgroundColor: AppColors.surfaceLight,
+                  color: AppColors.primary,
+                  minHeight: 6,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Current step label
+            Text(
+              state.currentStep ?? 'Analyzing...',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 16,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+
+            // Step dots
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(
+                4,
+                (i) => Container(
+                  width: 8,
+                  height: 8,
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: i < state.stepsCompleted
+                        ? AppColors.primary
+                        : AppColors.surfaceLight,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildResult(Album album, double confidence, String source) {
+  // ==========================================
+  // Success State
+  // ==========================================
+
+  Widget _buildResult(ScanResultSuccess state) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Album cover + confidence badge
-          _buildCoverWithBadge(album, confidence),
-          const SizedBox(height: 24),
+          // Cover + confidence
+          _buildCoverWithBadge(state),
+          const SizedBox(height: 20),
+
+          // Pipeline summary
+          if (state.pipelineSummary != null)
+            _buildPipelineSummary(state.pipelineSummary!),
+          if (state.pipelineSummary != null)
+            const SizedBox(height: 16),
+
+          // Extracted text (debug / info)
+          if (state.extractedText != null && state.extractedText!.isNotEmpty)
+            _buildExtractedTextCard(state.extractedText!),
+          if (state.extractedText != null && state.extractedText!.isNotEmpty)
+            const SizedBox(height: 16),
+
           // Album info card
-          _buildInfoCard(album, source),
-          const SizedBox(height: 24),
+          _buildInfoCard(state.album, state.source),
+          const SizedBox(height: 20),
+
           // Tracklist
-          if (album.tracklist.isNotEmpty) ...[
-            _buildTracklist(album.tracklist),
-            const SizedBox(height: 24),
+          if (state.album.tracklist.isNotEmpty) ...[
+            _buildTracklist(state.album.tracklist),
+            const SizedBox(height: 20),
           ],
-          // Save button (one-handed zone)
-          _buildSaveButton(album),
-          const SizedBox(height: 16),
+
+          // Save button
+          _buildSaveButton(state.album),
+          const SizedBox(height: 12),
+
           // Retry button
           _buildRetryButton(),
+          const SizedBox(height: 24),
         ],
       ),
     );
   }
 
-  Widget _buildCoverWithBadge(Album album, double confidence) {
+  Widget _buildCoverWithBadge(ScanResultSuccess state) {
     return Center(
       child: Stack(
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: album.userPhotoPath != null
+            child: state.album.userPhotoPath != null
                 ? Image.file(
-                    File(album.userPhotoPath!),
+                    File(state.album.userPhotoPath!),
                     width: 240,
                     height: 240,
                     fit: BoxFit.cover,
@@ -143,19 +250,125 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
             top: 8,
             right: 8,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: confidence >= 0.7 ? AppColors.success : AppColors.warning,
-                borderRadius: BorderRadius.circular(8),
+                color: state.confidence >= 0.8
+                    ? AppColors.success
+                    : state.confidence >= 0.6
+                        ? AppColors.warning
+                        : AppColors.error,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                  ),
+                ],
               ),
               child: Text(
-                '${(confidence * 100).toInt()}%',
+                '${(state.confidence * 100).toInt()}%',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
-                  fontSize: 12,
+                  fontSize: 13,
                 ),
               ),
+            ),
+          ),
+          Positioned(
+            bottom: 8,
+            left: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.background.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    state.source == 'Barcode' ? Icons.qr_code : Icons.cloud,
+                    size: 12,
+                    color: AppColors.primaryLight,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    state.source,
+                    style: const TextStyle(
+                      color: AppColors.primaryLight,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPipelineSummary(String summary) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.route, size: 16, color: AppColors.textTertiary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              summary,
+              style: const TextStyle(
+                color: AppColors.textTertiary,
+                fontSize: 11,
+                fontFamily: 'monospace',
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExtractedTextCard(String text) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.text_fields, size: 14, color: AppColors.textTertiary),
+              SizedBox(width: 6),
+              Text(
+                'Extracted Text',
+                style: TextStyle(
+                  color: AppColors.textTertiary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            text.length > 200 ? '${text.substring(0, 200)}...' : text,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
             ),
           ),
         ],
@@ -193,28 +406,16 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          _buildInfoRow(Icons.calendar_today, '${album.releaseYear ?? 'Unknown year'}'),
+          if (album.releaseYear != null)
+            _buildInfoRow(Icons.calendar_today, '${album.releaseYear}'),
           if (album.label != null)
             _buildInfoRow(Icons.label, album.label!),
           if (album.genre != null)
             _buildInfoRow(Icons.music_note, album.genre!),
           if (album.country != null)
             _buildInfoRow(Icons.flag, album.country!),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceLight,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              'Source: ${source.toUpperCase()}',
-              style: const TextStyle(
-                color: AppColors.textTertiary,
-                fontSize: 11,
-              ),
-            ),
-          ),
+          if (album.barcode != null)
+            _buildInfoRow(Icons.qr_code, album.barcode!),
         ],
       ),
     );
@@ -227,9 +428,12 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         children: [
           Icon(icon, size: 14, color: AppColors.textTertiary),
           const SizedBox(width: 8),
-          Text(
-            text,
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+          Flexible(
+            child: Text(
+              text,
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -240,41 +444,60 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Tracklist',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
+        Row(
+          children: [
+            const Text(
+              'Tracklist',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '${tracks.length}',
+                style: const TextStyle(
+                  color: AppColors.textTertiary,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         ...tracks.asMap().entries.map((entry) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 28,
-                child: Text(
-                  '${entry.key + 1}',
-                  style: const TextStyle(
-                    color: AppColors.textTertiary,
-                    fontSize: 13,
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 28,
+                    child: Text(
+                      '${entry.key + 1}',
+                      style: const TextStyle(
+                        color: AppColors.textTertiary,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  entry.value,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 14,
+                  Expanded(
+                    child: Text(
+                      entry.value,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
-        )),
+            )),
       ],
     );
   }
@@ -283,20 +506,21 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
     return SizedBox(
       width: double.infinity,
       height: 56,
-      child: ElevatedButton(
+      child: ElevatedButton.icon(
         onPressed: () {
           context.read<ScanResultBloc>().add(ConfirmAndSave(album));
         },
+        icon: const Icon(Icons.add_circle_outline, size: 20),
+        label: const Text(
+          'Add to Collection',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-        ),
-        child: const Text(
-          'Add to Collection',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -306,31 +530,34 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
     return SizedBox(
       width: double.infinity,
       height: 48,
-      child: OutlinedButton(
+      child: OutlinedButton.icon(
         onPressed: () {
           context.read<ScanResultBloc>().add(RetryRecognition(widget.imagePath));
         },
+        icon: const Icon(Icons.refresh, size: 18),
+        label: const Text('Try Again'),
         style: OutlinedButton.styleFrom(
           side: const BorderSide(color: AppColors.border),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
         ),
-        child: const Text(
-          'Try Again',
-          style: TextStyle(color: AppColors.textSecondary),
-        ),
       ),
     );
   }
 
-  Widget _buildFailure(String message) {
+  // ==========================================
+  // Failure State
+  // ==========================================
+
+  Widget _buildFailure(ScanResultFailure state) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Captured photo
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: Image.file(
@@ -341,14 +568,42 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
               ),
             ),
             const SizedBox(height: 24),
+
             const Icon(Icons.search_off, size: 48, color: AppColors.error),
             const SizedBox(height: 16),
+
             Text(
-              message,
+              state.message,
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 16),
               textAlign: TextAlign.center,
             ),
+
+            // Pipeline debug info
+            if (state.pipelineSummary != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                state.pipelineSummary!,
+                style: const TextStyle(
+                  color: AppColors.textTertiary,
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+
+            if (state.extractedText != null && state.extractedText!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Detected text: "${state.extractedText!.length > 60 ? '${state.extractedText!.substring(0, 60)}...' : state.extractedText}"',
+                style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ],
+
             const SizedBox(height: 24),
+
+            // Retry
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -362,62 +617,53 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text('Retry'),
+                child: const Text('Retry Scan'),
               ),
             ),
             const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => _showManualSearchDialog(),
-              child: const Text('Search manually'),
+
+            // Manual search
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ManualSearchScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.edit, size: 18),
+                label: const Text('Search Manually'),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.primary),
+                  foregroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  void _showManualSearchDialog() {
-    final artistCtrl = TextEditingController();
-    final albumCtrl = TextEditingController();
+/// Widget for animated scanning overlay.
+class AnimatedBuilder extends AnimatedWidget {
+  final Widget Function(BuildContext context, Widget? child) builder;
 
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Manual Search', style: TextStyle(color: AppColors.textPrimary)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: artistCtrl,
-              decoration: const InputDecoration(hintText: 'Artist name'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: albumCtrl,
-              decoration: const InputDecoration(hintText: 'Album title'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              context.read<ScanResultBloc>().add(
-                    ManualSearch(
-                      artist: artistCtrl.text,
-                      album: albumCtrl.text,
-                    ),
-                  );
-            },
-            child: const Text('Search'),
-          ),
-        ],
-      ),
-    );
+  const AnimatedBuilder({
+    super.key,
+    required super.listenable,
+    required this.builder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return builder(context, null);
   }
 }

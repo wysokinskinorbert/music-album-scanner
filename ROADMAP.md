@@ -1,6 +1,6 @@
 # Roadmap
 
-## v0.1.0 - Foundation (Current)
+## v0.1.0 - Foundation
 - [x] Flutter project scaffold with clean architecture
 - [x] BLoC state management (Camera, Collection, ScanResult)
 - [x] Dark theme with Material 3
@@ -11,15 +11,17 @@
 - [x] Settings screen with export
 - [x] GitHub repository initialized
 
-## v0.2.0 - Core Recognition
-- [ ] Google ML Kit image labeling integration
-- [ ] OCR text extraction from album covers
-- [ ] Barcode/UPC scanning via camera
-- [ ] MusicBrainz search by extracted text
-- [ ] Discogs fallback when MusicBrainz fails
-- [ ] Cover Art Archive integration for cover art
-- [ ] Recognition confidence scoring
-- [ ] Manual search (artist + album input)
+## v0.2.0 - Core Recognition (Current)
+- [x] Google ML Kit image labeling integration
+- [x] OCR text extraction from album covers
+- [x] Barcode/UPC scanning via camera
+- [x] MusicBrainz search by extracted text
+- [x] Discogs fallback when MusicBrainz fails
+- [x] Cover Art Archive integration for cover art
+- [x] Recognition confidence scoring
+- [x] Manual search (artist + album input)
+- [x] Recognition pipeline visualization (step-by-step progress)
+- [x] Pipeline summary debug info
 
 ## v0.3.0 - Offline Mode
 - [ ] TFLite model training/fine-tuning on album covers
