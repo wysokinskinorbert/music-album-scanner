@@ -56,7 +56,7 @@
   "@resultConfidence": {
     "description": "Confidence percentage",
     "placeholders": {
-      "percentage": { "type": "double", "format": "###.0" }
+      "percentage": { "type": "double", "format": "decimalPattern" }
     }
   },
 

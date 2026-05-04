@@ -7,8 +7,9 @@ plugins {
 
 android {
     namespace = "com.albumscanner.music_album_scanner"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    compileSdk = 35
+    buildToolsVersion = "35.0.1"
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
