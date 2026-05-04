@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/haptic_service.dart';
+import '../../data/repositories/album_repository.dart';
+import '../collection/bloc/collection_bloc.dart';
 import '../collection/collection_screen.dart';
 import '../camera/scan_screen.dart';
 import '../settings/settings_screen.dart';
@@ -25,10 +27,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final repository = context.read<AlbumRepository>();
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: [
+          BlocProvider(
+            create: (_) => CollectionBloc(repository)..add(LoadCollection()),
+            child: const CollectionScreen(),
+          ),
+          const ScanScreen(),
+          const SettingsScreen(),
+        ],
       ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
