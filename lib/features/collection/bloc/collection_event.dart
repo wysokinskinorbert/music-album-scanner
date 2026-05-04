@@ -43,3 +43,14 @@ class UpdateAlbum extends CollectionEvent {
 
 /// Clear search and show all.
 class ClearSearch extends CollectionEvent {}
+
+/// Export collection to JSON/CSV.
+class ExportCollection extends CollectionEvent {}
+
+/// Toggle album favorite status.
+class ToggleFavorite extends CollectionEvent {
+  final String albumId;
+  const ToggleFavorite(this.albumId);
+  @override
+  List<Object?> get props => [albumId];
+}

@@ -21,7 +21,6 @@
 - [x] Recognition confidence scoring
 - [x] Manual search (artist + album input)
 - [x] Recognition pipeline visualization (step-by-step progress)
-- [x] Pipeline summary debug info
 
 ## v0.3.0 - Offline Mode
 - [x] Model download manager (download, cache, verify, delete)
@@ -32,33 +31,32 @@
 - [x] Offline-to-online sync service (enrich on reconnect)
 - [x] Model versioning and update checker
 - [x] Model download screen with progress UI
-- [x] Offline badge widget (scan screen status)
-- [x] Sync status bar widget (collection screen)
-- [x] Updated recognition pipeline with offline as step 5
-- [x] Updated settings with model management section
+- [x] Offline badge + sync status bar widgets
 
-## v0.4.0 - Image Editing (Current)
+## v0.4.0 - Image Editing
 - [x] Image editor service (crop, rotate, flip, brightness, contrast, saturation, gamma)
 - [x] Perspective correction with auto-detect corners + bilinear warp
-- [x] Auto-enhancement (7 modes: auto, vivid, warm, cool, vintage, highContrast, lowLight)
-- [x] Image analysis stats (brightness, contrast, dynamic range)
-- [x] OCR-optimized enhancement (grayscale + threshold + sharpen)
-- [x] ML-optimized enhancement (normalize + contrast + saturation + sharpen)
-- [x] Sepia and grayscale filters
-- [x] Interactive image editor screen with 5 modes (Crop, Adjust, Filters, Perspective, Enhance)
-- [x] Undo/redo history (10 steps)
-- [x] Reset to original
-- [x] Before/after comparison screen with interactive slider
-- [x] Edit preview screen in scan flow (Edit -> Enhance -> Scan)
-- [x] Gallery picker goes through edit preview
+- [x] Auto-enhancement with 7 preset modes
+- [x] Image histogram analysis
+- [x] OCR-optimized and ML-optimized enhancement
+- [x] Interactive image editor screen (5 modes)
+- [x] Before/after comparison with slider
+- [x] Edit preview in scan flow
 
-## v0.5.0 - Collection Management
-- [ ] Sort collection (by date, artist, year, genre)
-- [ ] Filter by genre / decade / label
-- [ ] Collection statistics dashboard
-- [ ] Duplicate detection
-- [ ] Batch scan mode (scan multiple albums in sequence)
-- [ ] Wishlist for albums to find
+## v0.5.0 - Collection Management (Current)
+- [x] Collection sort (7 fields: date, title, artist, year, genre, label, confidence)
+- [x] Sort grouping for section headers
+- [x] Collection filter (genre, decade, label, confidence, favorites, date range, search)
+- [x] Genre/decade/label extraction from collection
+- [x] Collection statistics dashboard (overview cards, scan methods, top artists/labels, genres, decades, recent additions)
+- [x] Duplicate detection (MusicBrainz ID, barcode, exact match, fuzzy Jaccard bigram similarity)
+- [x] Batch scan mode (multi-photo gallery picker, sequential processing, progress UI)
+- [x] Wishlist (add/remove/mark found, manual input, search, swipe-to-delete)
+- [x] Filter/Sort bottom sheet widget
+- [x] Grid/List view toggle
+- [x] Export collection event
+- [x] Toggle favorite event
+- [x] Updated Collection BLoC with ExportCollection + ToggleFavorite events
 
 ## v0.6.0 - Polish & UX
 - [ ] Haptic feedback on scan events
@@ -79,20 +77,18 @@
 - [ ] Firebase / Supabase integration
 - [ ] Cross-device sync
 - [ ] Cloud backup / restore
-- [ ] Optional user accounts (email, Google Sign-In)
+- [ ] Optional user accounts
 
 ## v0.9.0 - Beta
-- [ ] Full test coverage (unit, widget, integration)
-- [ ] Performance profiling and optimization
-- [ ] Accessibility audit (TalkBack support)
-- [ ] Multiple language support (i18n)
-- [ ] CI/CD pipeline (GitHub Actions)
+- [ ] Full test coverage
+- [ ] Performance profiling
+- [ ] Accessibility audit
+- [ ] i18n
+- [ ] CI/CD pipeline
 - [ ] Google Play Store preparation
 
 ## v1.0.0 - Production Release
 - [ ] Google Play Store submission
-- [ ] Privacy policy and terms of service
-- [ ] Landing page / website
-- [ ] Marketing materials
-- [ ] Analytics and crash reporting (Firebase)
-- [ ] In-app feedback mechanism
+- [ ] Privacy policy and terms
+- [ ] Landing page
+- [ ] Analytics and crash reporting

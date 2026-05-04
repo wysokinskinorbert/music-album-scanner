@@ -16,6 +16,8 @@ class CollectionBloc extends Bloc<CollectionEvent, CollectionState> {
     on<DeleteAlbum>(_onDeleteAlbum);
     on<UpdateAlbum>(_onUpdateAlbum);
     on<ClearSearch>(_onClearSearch);
+    on<ExportCollection>(_onExportCollection);
+    on<ToggleFavorite>(_onToggleFavorite);
   }
 
   Future<void> _onLoadCollection(
@@ -91,5 +93,39 @@ class CollectionBloc extends Bloc<CollectionEvent, CollectionState> {
     Emitter<CollectionState> emit,
   ) async {
     add(LoadCollection());
+  }
+
+  Future<void> _onExportCollection(
+    ExportCollection event,
+    Emitter<CollectionState> emit,
+  ) async {
+    try {
+      final path = await _repository.exportToJson();
+      emit(CollectionLoaded(
+        albums: _repository.getAllAlbums(),
+        totalCount: _repository.count,
+        exportPath: path,
+      ));
+    } catch (e) {
+      emit(CollectionError(e.toString()));
+    }
+  }
+
+  Future<void> _onToggleFavorite(
+    ToggleFavorite event,
+    Emitter<CollectionState> emit,
+  ) async {
+    try {
+      final albums = _repository.getAllAlbums();
+      final album = albums.firstWhere(
+        (a) => a.id == event.albumId,
+        orElse: () => throw Exception('Album not found'),
+      );
+      final updated = album.copyWith(isFavorite: !(album.isFavorite ?? false));
+      await _repository.updateAlbum(updated);
+      add(LoadCollection());
+    } catch (e) {
+      emit(CollectionError(e.toString()));
+    }
   }
 }

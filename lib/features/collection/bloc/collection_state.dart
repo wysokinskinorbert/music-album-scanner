@@ -14,15 +14,17 @@ class CollectionLoaded extends CollectionState {
   final List<Album> albums;
   final String? searchQuery;
   final int totalCount;
+  final String? exportPath;
 
   const CollectionLoaded({
     required this.albums,
     this.searchQuery,
     required this.totalCount,
+    this.exportPath,
   });
 
   @override
-  List<Object?> get props => [albums, searchQuery, totalCount];
+  List<Object?> get props => [albums, searchQuery, totalCount, exportPath];
 }
 
 class CollectionError extends CollectionState {
