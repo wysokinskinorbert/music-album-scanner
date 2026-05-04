@@ -17,15 +17,16 @@ class ShareService {
 
   /// Share album info with cover image.
   Future<void> shareAlbumWithImage(Album album) async {
-    if (album.coverImagePath == null || album.coverImagePath!.isEmpty) {
+    final imagePath = album.userPhotoPath ?? album.coverArtUrl;
+    if (imagePath == null || imagePath.isEmpty) {
       return shareAlbumText(album);
     }
 
     final text = _formatAlbumText(album);
-    final imageFile = File(album.coverImagePath!);
+    final imageFile = File(imagePath);
     if (await imageFile.exists()) {
       await Share.shareXFiles(
-        [XFile(album.coverImagePath!)],
+        [XFile(imagePath)],
         text: text,
         subject: '\${album.title} - \${album.artist}',
       );

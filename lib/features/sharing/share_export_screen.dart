@@ -94,11 +94,11 @@ class _ShareExportScreenState extends State<ShareExportScreen> with SingleTicker
       padding: const EdgeInsets.all(16),
       children: [
         // Album preview
-        if (album.coverImagePath != null)
+        if (album.userPhotoPath != null || album.coverArtUrl != null)
           ClipRRect(
             borderRadius: BorderRadius.circular(14),
             child: Image.file(
-              File(album.coverImagePath!),
+              File(album.userPhotoPath ?? album.coverArtUrl!),
               height: 200,
               width: double.infinity,
               fit: BoxFit.cover,
@@ -204,7 +204,7 @@ class _ShareExportScreenState extends State<ShareExportScreen> with SingleTicker
       );
     }
 
-    final coverImage = album.coverImagePath != null ? File(album.coverImagePath!) : null;
+    final coverImage = album.userPhotoPath != null ? File(album.userPhotoPath!) : (album.coverArtUrl != null ? File(album.coverArtUrl!) : null);
 
     return ListView(
       padding: const EdgeInsets.all(16),

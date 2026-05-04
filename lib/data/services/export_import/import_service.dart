@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:csv/csv.dart';
-import 'package:dart:convert';
+import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import '../../models/album_model.dart';
 import '../../repositories/album_repository.dart';
@@ -158,17 +158,16 @@ class ImportService {
         }
 
         final album = Album(
-          id: DateTime.now().millisecondsSinceEpoch.toString() + '_\$i',
+          id: DateTime.now().millisecondsSinceEpoch.toString() + '_$i',
           title: title,
           artist: artist,
-          year: _parseIntOrNull(_getCellValue(row, yearIdx)),
+          releaseYear: _parseIntOrNull(_getCellValue(row, yearIdx)),
           genre: _getCellValue(row, genreIdx),
           label: _getCellValue(row, labelIdx),
           barcode: _getCellValue(row, barcodeIdx),
           tracklist: _parseTracklist(_getCellValue(row, tracklistIdx)),
           dateAdded: DateTime.now(),
-          confidence: 1.0,
-          scanMethod: 'import_discogs',
+          recognitionConfidence: 1.0,
         );
 
         await _repository.addAlbum(album);
@@ -236,17 +235,16 @@ class ImportService {
         }
 
         final album = Album(
-          id: DateTime.now().millisecondsSinceEpoch.toString() + '_mb_\$i',
+          id: DateTime.now().millisecondsSinceEpoch.toString() + '_mb_$i',
           title: title,
           artist: artist,
-          year: year,
+          releaseYear: year,
           genre: null, // MB doesn't include genre in release data
           label: null, // Would need separate lookup
           musicBrainzId: release['id']?.toString(),
           tracklist: tracks,
           dateAdded: DateTime.now(),
-          confidence: 1.0,
-          scanMethod: 'import_musicbrainz',
+          recognitionConfidence: 1.0,
         );
 
         await _repository.addAlbum(album);
@@ -296,18 +294,17 @@ class ImportService {
         final tracklist = (data['tracklist'] as List<dynamic>? ?? []).cast<String>();
 
         final album = Album(
-          id: DateTime.now().millisecondsSinceEpoch.toString() + '_gen_\$i',
+          id: DateTime.now().millisecondsSinceEpoch.toString() + '_gen_$i',
           title: title,
           artist: artist,
-          year: data['year'] as int?,
+          releaseYear: data['year'] as int?,
           genre: data['genre']?.toString(),
           label: data['label']?.toString(),
           barcode: data['barcode']?.toString(),
           musicBrainzId: data['musicBrainzId']?.toString(),
           tracklist: tracklist,
           dateAdded: DateTime.now(),
-          confidence: (data['confidence'] as num?)?.toDouble() ?? 1.0,
-          scanMethod: 'import_json',
+          recognitionConfidence: (data['confidence'] as num?)?.toDouble() ?? 1.0,
         );
 
         await _repository.addAlbum(album);

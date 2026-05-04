@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:csv/csv.dart';
-import 'package:dart:convert';
+import 'dart:convert';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
@@ -48,7 +48,7 @@ class ExportService {
       'albums': albums.map((a) => _albumToMap(a)).toList(),
     };
 
-    final jsonString = const JsonEncoder.withIndent('  ').convert(data);
+    final jsonString = JsonEncoder.withIndent('  ').convert(data);
     final path = await _getFilePath('collection', 'json');
     await File(path).writeAsString(jsonString);
     return path;
@@ -215,7 +215,7 @@ class ExportService {
         'musicBrainzId': album.musicBrainzId,
         'tracklist': album.tracklist,
         'dateAdded': album.dateAdded.toIso8601String(),
-        'confidence': album.confidence,
+        'confidence': album.recognitionConfidence,
       };
 
   Future<String> _getFilePath(String prefix, String extension) async {

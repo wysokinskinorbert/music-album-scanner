@@ -121,7 +121,7 @@ class WishlistService {
       artist: album.artist,
       year: album.year,
       genre: album.genre,
-      coverUrl: album.coverUrl,
+      coverUrl: album.coverArtUrl,
       notes: notes,
       dateAdded: DateTime.now(),
     ));

@@ -152,13 +152,13 @@ class CollectionInfographic extends StatelessWidget {
                     ),
                     Expanded(
                       child: Text(
-                        entry.key.key,
+                        entry.value.key,
                         style: const TextStyle(color: Colors.white, fontSize: 22),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     Text(
-                      '\${entry.key.value}',
+                      '\${entry.value.value}',
                       style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 18),
                     ),
                   ],
