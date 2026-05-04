@@ -7,7 +7,7 @@ class BarcodeScanningService {
   final BarcodeScanner _scanner = BarcodeScanner(
     formats: [
       BarcodeFormat.ean13,   // Most common for albums
-      BarcodeFormat.upcA,    // North American albums
+      BarcodeFormat.ean13,    // North American albums
       BarcodeFormat.ean8,    // Some releases
       BarcodeFormat.qrCode,  // Modern releases may have QR
     ],
@@ -78,7 +78,7 @@ class BarcodeScanningService {
     switch (format) {
       case BarcodeFormat.ean13:
         return 0;
-      case BarcodeFormat.upcA:
+      case BarcodeFormat.ean13:
         return 1;
       case BarcodeFormat.ean8:
         return 2;
@@ -91,7 +91,7 @@ class BarcodeScanningService {
     switch (format) {
       case BarcodeFormat.ean13:
         return 'EAN-13';
-      case BarcodeFormat.upcA:
+      case BarcodeFormat.ean13:
         return 'UPC-A';
       case BarcodeFormat.ean8:
         return 'EAN-8';

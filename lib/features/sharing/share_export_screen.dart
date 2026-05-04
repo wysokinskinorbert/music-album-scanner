@@ -191,7 +191,7 @@ class _ShareExportScreenState extends State<ShareExportScreen> with SingleTicker
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.instagram, size: 64, color: AppColors.textTertiary),
+              Icon(Icons.share, size: 64, color: AppColors.textTertiary),
               SizedBox(height: 16),
               Text(
                 'Open an album to generate an Instagram Story',
