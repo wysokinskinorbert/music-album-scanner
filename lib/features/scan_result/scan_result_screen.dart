@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'bloc/scan_result_bloc.dart';
 import '../../../data/models/album_model.dart';
+import '../../../data/services/recognition_service.dart';
+import '../../../data/repositories/album_repository.dart';
+import 'bloc/scan_result_bloc.dart';
+import 'bloc/scan_result_event.dart';
+import 'bloc/scan_result_state.dart';
 
 class ScanResultScreen extends StatelessWidget {
   final String imagePath;
@@ -10,75 +14,79 @@ class ScanResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) {
-        final repo = RepositoryProvider.of(context);
-        return ScanResultBloc(
-          recognition: repo,
-          repository: RepositoryProvider.of(context),
-        )..add(StartRecognition(imagePath: imagePath));
-      },
-      child: Scaffold(
-        backgroundColor: const Color(0xFF0F0F1A),
-        appBar: AppBar(
-          title: const Text('Scan Result'),
-          backgroundColor: const Color(0xFF1A1A2E),
-          foregroundColor: Colors.white,
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Scan Result'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
         ),
-        body: BlocBuilder<ScanResultBloc, ScanResultState>(
+      ),
+      body: BlocProvider(
+        create: (context) => ScanResultBloc(
+          recognition: context.read<RecognitionService>(),
+          repository: context.read<AlbumRepository>(),
+        )..add(StartRecognition(imagePath)),
+        child: BlocBuilder<ScanResultBloc, ScanResultState>(
           builder: (context, state) {
             if (state is ScanResultProcessing) {
               return Center(
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const CircularProgressIndicator(color: Color(0xFF7C3AED)),
-                    const SizedBox(height: 24),
-                    Text(state.currentStep ?? 'Recognizing album...',
-                        style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(state.currentStep),
                   ],
                 ),
               );
             } else if (state is ScanResultSuccess) {
-              return _AlbumResultCard(album: state.album);
-            } else if (state is ScanResultMultipleMatches) {
-              return _MatchesList(matches: state.matches);
-            } else if (state is ScanResultFailure) {
-              return Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.redAccent, size: 64),
-                    const SizedBox(height: 16),
-                    Text(state.message, style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: () => context.read<ScanResultBloc>().add(RetryRecognition()),
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C3AED)),
-                      child: const Text('Try Again'),
-                    ),
-                  ],
-                ),
+              return _AlbumDetail(
+                album: state.album,
+                confidence: state.confidence,
+                source: state.source,
+                onSave: () {
+                  context.read<ScanResultBloc>().add(ConfirmAndSave(album: state.album));
+                },
               );
             } else if (state is ScanResultSaved) {
               return Center(
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.check_circle, color: Colors.greenAccent, size: 64),
+                    const Icon(Icons.check_circle, size: 64, color: Colors.green),
                     const SizedBox(height: 16),
-                    const Text('Album saved!', style: TextStyle(color: Colors.white, fontSize: 20)),
-                    const SizedBox(height: 24),
+                    const Text('Album saved to collection!'),
+                    const SizedBox(height: 16),
+                    Text(state.album.title),
+                    const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C3AED)),
-                      child: const Text('Back'),
+                      child: const Text('Done'),
+                    ),
+                  ],
+                ),
+              );
+            } else if (state is ScanResultFailure) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text(state.message),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        context.read<ScanResultBloc>().add(RetryRecognition(imagePath));
+                      },
+                      child: const Text('Retry'),
                     ),
                   ],
                 ),
               );
             }
-            return const Center(child: Text('Ready to scan', style: TextStyle(color: Colors.white54)));
+            return const Center(child: Text('Ready to scan'));
           },
         ),
       ),
@@ -86,82 +94,105 @@ class ScanResultScreen extends StatelessWidget {
   }
 }
 
-class _AlbumResultCard extends StatelessWidget {
+class _AlbumDetail extends StatelessWidget {
   final Album album;
-  const _AlbumResultCard({required this.album});
+  final double confidence;
+  final String source;
+  final VoidCallback onSave;
+
+  const _AlbumDetail({
+    required this.album,
+    this.confidence = 0.0,
+    this.source = 'unknown',
+    required this.onSave,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (album.coverArtUrl != null)
+          if (album.coverUrl != null)
             Center(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.network(album.coverArtUrl!, height: 200, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                        height: 200, color: const Color(0xFF1A1A2E),
-                        child: const Icon(Icons.album, size: 80, color: Color(0xFF7C3AED)))),
+                child: Image.network(
+                  album.coverUrl!,
+                  height: 250,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    height: 250,
+                    width: 250,
+                    color: Colors.grey[800],
+                    child: const Icon(Icons.album, size: 80),
+                  ),
+                ),
               ),
             ),
-          const SizedBox(height: 20),
-          Text(album.title, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text(album.artist, style: const TextStyle(color: Color(0xFF00D4FF), fontSize: 18)),
+          const SizedBox(height: 16),
+          Text(
+            album.title,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            album.artist,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.grey[400],
+                ),
+          ),
           if (album.releaseYear != null)
-            Padding(padding: const EdgeInsets.only(top: 8), child: Text('Year: \${album.releaseYear}', style: const TextStyle(color: Colors.white70))),
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('Year: ${album.releaseYear}'),
+            ),
+          if (album.label != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('Label: ${album.label}'),
+            ),
           if (album.genre != null)
-            Padding(padding: const EdgeInsets.only(top: 4), child: Text('Genre: \${album.genre}', style: const TextStyle(color: Colors.white70))),
-          const SizedBox(height: 30),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton(
-                onPressed: () => context.read<ScanResultBloc>().add(ConfirmAndSave(album: album)),
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C3AED), padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14)),
-                child: const Text('Add to Collection'),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: OutlinedButton.styleFrom(foregroundColor: Colors.white54, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14)),
-                child: const Text('Cancel'),
-              ),
-            ],
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('Genre: ${album.genre}'),
+            ),
+          if (album.country != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('Country: ${album.country}'),
+            ),
+          if (album.barcode != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('Barcode: ${album.barcode}'),
+            ),
+          const SizedBox(height: 8),
+          Text(
+            'Confidence: ${(confidence * 100).toStringAsFixed(0)}% via $source',
+            style: TextStyle(color: Colors.grey[500], fontSize: 12),
+          ),
+          if (album.tracklist.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text('Tracklist', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            ...album.tracklist.asMap().entries.map((entry) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text('${entry.key + 1}. ${entry.value}'),
+                )),
+          ],
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onSave,
+              icon: const Icon(Icons.save),
+              label: const Text('Save to Collection'),
+            ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _MatchesList extends StatelessWidget {
-  final List<Album> matches;
-  const _MatchesList({required this.matches});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: matches.length,
-      itemBuilder: (context, index) {
-        final album = matches[index];
-        return Card(
-          color: const Color(0xFF1A1A2E),
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: album.coverArtUrl != null
-                ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(album.coverArtUrl!, width: 50, height: 50, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.album, color: Color(0xFF7C3AED))))
-                : const Icon(Icons.album, color: Color(0xFF7C3AED)),
-            title: Text(album.title, style: const TextStyle(color: Colors.white)),
-            subtitle: Text('\${album.artist}\${album.releaseYear != null ? ' (\${album.releaseYear})' : ''}', style: const TextStyle(color: Colors.white54)),
-            onTap: () => context.read<ScanResultBloc>().add(SelectResult(album: album)),
-          ),
-        );
-      },
     );
   }
 }

@@ -37,7 +37,7 @@ class MusicBrainzService {
       },
     );
 
-    final data = response.data as Map<String, dynamic>;
+    final data = response as Map<String, dynamic>;
     final releases = data['releases'] as List<dynamic>? ?? [];
     return releases.cast<Map<String, dynamic>>();
   }
@@ -52,7 +52,7 @@ class MusicBrainzService {
       },
     );
 
-    return response.data as Map<String, dynamic>?;
+    return response as Map<String, dynamic>?;
   }
 
   /// Get cover art URL from Cover Art Archive.
@@ -61,7 +61,7 @@ class MusicBrainzService {
       final response = await _client.get(
         '${AppConstants.coverArtArchiveUrl}/release/$mbid',
       );
-      final data = response.data as Map<String, dynamic>?;
+      final data = response as Map<String, dynamic>?;
       final images = data?['images'] as List<dynamic>? ?? [];
       if (images.isNotEmpty) {
         return images[0]['image'] as String?;

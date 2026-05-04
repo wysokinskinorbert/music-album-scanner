@@ -17,11 +17,6 @@ class DiscogsService {
   }
 
   factory DiscogsService([ApiClient? client]) => DiscogsService._(client ?? ApiClient());
-    _dio = Dio(BaseOptions(
-      baseUrl: 'https://api.discogs.com',
-      headers: {'User-Agent': 'MusicAlbumScanner/1.0'},
-    ));
-  }
 
   void setToken(String token) => _token = token;
 

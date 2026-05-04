@@ -26,7 +26,7 @@ class RecognitionService {
     TfliteInferenceService? tfliteService,
     OfflineRecognitionService? offlineService,
   })  : _apiClient = apiClient,
-        _musicBrainz = musicBrainz ?? MusicBrainzService(),
+        _musicBrainz = musicBrainz ?? MusicBrainzService(ApiClient()),
         _discogs = discogs ?? DiscogsService(),
         _barcodeService = barcodeService ?? BarcodeScanningService(),
         _tfliteService = tfliteService,
@@ -57,8 +57,8 @@ class RecognitionService {
           if (offlineResult.recognized && offlineResult.confidence >= 0.6) {
             final album = Album(
               id: const Uuid().v4(),
-              title: offlineResult.title,
-              artist: offlineResult.artist,
+              title: offlineResult.title ?? 'Unknown',
+              artist: offlineResult.artist ?? 'Unknown',
               dateAdded: DateTime.now(),
               recognitionConfidence: offlineResult.confidence,
               userPhotoPath: imagePath,
