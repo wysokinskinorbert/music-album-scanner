@@ -11,10 +11,13 @@ class ScanResultScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => ScanResultBloc(
-        recognitionService: RepositoryProvider.of(context),
-        albumRepository: RepositoryProvider.of(context),
-      )..add(StartRecognition(imagePath: imagePath)),
+      create: (context) {
+        final repo = RepositoryProvider.of(context);
+        return ScanResultBloc(
+          recognition: repo,
+          repository: RepositoryProvider.of(context),
+        )..add(StartRecognition(imagePath: imagePath));
+      },
       child: Scaffold(
         backgroundColor: const Color(0xFF0F0F1A),
         appBar: AppBar(
@@ -31,7 +34,7 @@ class ScanResultScreen extends StatelessWidget {
                   children: [
                     const CircularProgressIndicator(color: Color(0xFF7C3AED)),
                     const SizedBox(height: 24),
-                    Text(state.stage ?? 'Recognizing album...',
+                    Text(state.currentStep ?? 'Recognizing album...',
                         style: const TextStyle(color: Colors.white70, fontSize: 16)),
                   ],
                 ),
@@ -39,7 +42,7 @@ class ScanResultScreen extends StatelessWidget {
             } else if (state is ScanResultSuccess) {
               return _AlbumResultCard(album: state.album);
             } else if (state is ScanResultMultipleMatches) {
-              return _MultipleMatchesList(albums: state.albums);
+              return _MatchesList(matches: state.matches);
             } else if (state is ScanResultFailure) {
               return Center(
                 child: Column(
@@ -109,11 +112,9 @@ class _AlbumResultCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(album.artist, style: const TextStyle(color: Color(0xFF00D4FF), fontSize: 18)),
           if (album.releaseYear != null)
-            Padding(padding: const EdgeInsets.only(top: 8), child: Text('Year: ${album.releaseYear}', style: const TextStyle(color: Colors.white70))),
+            Padding(padding: const EdgeInsets.only(top: 8), child: Text('Year: \${album.releaseYear}', style: const TextStyle(color: Colors.white70))),
           if (album.genre != null)
-            Padding(padding: const EdgeInsets.only(top: 4), child: Text('Genre: ${album.genre}', style: const TextStyle(color: Colors.white70))),
-          if (album.label != null)
-            Padding(padding: const EdgeInsets.only(top: 4), child: Text('Label: ${album.label}', style: const TextStyle(color: Colors.white70))),
+            Padding(padding: const EdgeInsets.only(top: 4), child: Text('Genre: \${album.genre}', style: const TextStyle(color: Colors.white70))),
           const SizedBox(height: 30),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -137,17 +138,17 @@ class _AlbumResultCard extends StatelessWidget {
   }
 }
 
-class _MultipleMatchesList extends StatelessWidget {
-  final List<Album> albums;
-  const _MultipleMatchesList({required this.albums});
+class _MatchesList extends StatelessWidget {
+  final List<Album> matches;
+  const _MatchesList({required this.matches});
 
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: albums.length,
+      itemCount: matches.length,
       itemBuilder: (context, index) {
-        final album = albums[index];
+        final album = matches[index];
         return Card(
           color: const Color(0xFF1A1A2E),
           margin: const EdgeInsets.only(bottom: 12),
@@ -156,7 +157,7 @@ class _MultipleMatchesList extends StatelessWidget {
                 ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(album.coverArtUrl!, width: 50, height: 50, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.album, color: Color(0xFF7C3AED))))
                 : const Icon(Icons.album, color: Color(0xFF7C3AED)),
             title: Text(album.title, style: const TextStyle(color: Colors.white)),
-            subtitle: Text('${album.artist}${album.releaseYear != null ? ' (${album.releaseYear})' : ''}', style: const TextStyle(color: Colors.white54)),
+            subtitle: Text('\${album.artist}\${album.releaseYear != null ? ' (\${album.releaseYear})' : ''}', style: const TextStyle(color: Colors.white54)),
             onTap: () => context.read<ScanResultBloc>().add(SelectResult(album: album)),
           ),
         );

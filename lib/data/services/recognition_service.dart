@@ -2,11 +2,11 @@ import 'dart:io';
 import 'package:uuid/uuid.dart';
 import '../models/album_model.dart';
 import '../models/recognition_result.dart';
-import 'api/musicbrainz_service.dart';
-import 'api/discogs_service.dart';
-import 'ml/barcode_scanning_service.dart';
-import 'offline/offline_recognition_service.dart';
-import 'ml/tflite_inference_service.dart';
+import '../api/musicbrainz_service.dart';
+import '../api/discogs_service.dart';
+import '../ml/barcode_scanning_service.dart';
+import '../offline/offline_recognition_service.dart';
+import '../ml/tflite_inference_service.dart';
 import '../../../core/network/api_client.dart';
 
 /// Main recognition pipeline service.
@@ -26,8 +26,8 @@ class RecognitionService {
     TfliteInferenceService? tfliteService,
     OfflineRecognitionService? offlineService,
   })  : _apiClient = apiClient,
-        _musicBrainz = musicBrainz ?? MusicBrainzService(apiClient),
-        _discogs = discogs ?? DiscogsService(apiClient),
+        _musicBrainz = musicBrainz ?? MusicBrainzService(),
+        _discogs = discogs ?? DiscogsService(),
         _barcodeService = barcodeService ?? BarcodeScanningService(),
         _tfliteService = tfliteService,
         _offlineService = offlineService;
@@ -36,9 +36,9 @@ class RecognitionService {
   Future<RecognitionResult> recognizeFromImage(String imagePath) async {
     try {
       // Step 1: Try barcode scanning
-      final barcode = await _barcodeService.scanBarcodeFromFile(imagePath);
-      if (barcode != null && barcode.isNotEmpty) {
-        final album = await _searchByBarcode(barcode);
+      final barcodeResult = await _barcodeService.scanImage(imagePath);
+      if (barcodeResult.barcode != null && barcodeResult.barcode!.isNotEmpty) {
+        final album = await _searchByBarcode(barcodeResult.barcode!);
         if (album != null) {
           return RecognitionResult(
             state: RecognitionState.success,
@@ -54,7 +54,7 @@ class RecognitionService {
       if (_offlineService != null) {
         try {
           final offlineResult = await _offlineService!.recognize(imagePath);
-          if (offlineResult != null && offlineResult.confidence >= 0.6) {
+          if (offlineResult.recognized && offlineResult.confidence >= 0.6) {
             final album = Album(
               id: const Uuid().v4(),
               title: offlineResult.title,
@@ -82,30 +82,45 @@ class RecognitionService {
         } catch (_) {}
       }
 
-      // Step 4: MusicBrainz
+      // Step 4: MusicBrainz (returns List<Map>, need to parse)
       if (searchQuery != null) {
-        final mbResults = await _musicBrainz.searchRelease(searchQuery);
-        if (mbResults.isNotEmpty) {
-          return RecognitionResult(
-            state: RecognitionState.success,
-            album: mbResults.first,
-            confidence: mbResults.first.recognitionConfidence,
-            source: 'online',
-          );
-        }
+        try {
+          final mbRaw = await _musicBrainz.searchRelease(query: searchQuery);
+          if (mbRaw.isNotEmpty) {
+            final first = mbRaw.first;
+            final album = Album(
+              id: const Uuid().v4(),
+              title: first['title']?.toString() ?? 'Unknown',
+              artist: first['artist-credit']?[0]?['name']?.toString() ?? 'Unknown',
+              releaseYear: int.tryParse(first['date']?.toString().substring(0, 4) ?? ''),
+              dateAdded: DateTime.now(),
+              musicBrainzId: first['id']?.toString(),
+              recognitionConfidence: 0.5,
+              userPhotoPath: imagePath,
+            );
+            return RecognitionResult(
+              state: RecognitionState.success,
+              album: album,
+              confidence: 0.5,
+              source: 'online',
+            );
+          }
+        } catch (_) {}
       }
 
-      // Step 5: Discogs fallback
+      // Step 5: Discogs (returns List<Album> directly)
       if (searchQuery != null) {
-        final discogsResults = await _discogs.searchRelease(searchQuery);
-        if (discogsResults.isNotEmpty) {
-          return RecognitionResult(
-            state: RecognitionState.success,
-            album: discogsResults.first,
-            confidence: discogsResults.first.recognitionConfidence,
-            source: 'online',
-          );
-        }
+        try {
+          final discogsResults = await _discogs.searchRelease(searchQuery);
+          if (discogsResults.isNotEmpty) {
+            return RecognitionResult(
+              state: RecognitionState.success,
+              album: discogsResults.first,
+              confidence: discogsResults.first.recognitionConfidence,
+              source: 'online',
+            );
+          }
+        } catch (_) {}
       }
 
       return RecognitionResult(
@@ -122,8 +137,20 @@ class RecognitionService {
 
   Future<Album?> _searchByBarcode(String barcode) async {
     try {
-      final results = await _musicBrainz.searchRelease('barcode:$barcode');
-      if (results.isNotEmpty) return results.first;
+      final mbRaw = await _musicBrainz.searchByBarcode(barcode);
+      if (mbRaw.isNotEmpty) {
+        final first = mbRaw.first;
+        return Album(
+          id: const Uuid().v4(),
+          title: first['title']?.toString() ?? 'Unknown',
+          artist: first['artist-credit']?[0]?['name']?.toString() ?? 'Unknown',
+          releaseYear: int.tryParse(first['date']?.toString().substring(0, 4) ?? ''),
+          dateAdded: DateTime.now(),
+          musicBrainzId: first['id']?.toString(),
+          barcode: barcode,
+          recognitionConfidence: 0.8,
+        );
+      }
     } catch (_) {}
     try {
       final results = await _discogs.searchRelease(barcode);
@@ -134,7 +161,20 @@ class RecognitionService {
 
   Future<List<Album>> searchByQuery(String query) async {
     final results = <Album>[];
-    try { results.addAll(await _musicBrainz.searchRelease(query)); } catch (_) {}
+    try {
+      final mbRaw = await _musicBrainz.searchRelease(query: query);
+      for (final r in mbRaw) {
+        results.add(Album(
+          id: const Uuid().v4(),
+          title: r['title']?.toString() ?? 'Unknown',
+          artist: r['artist-credit']?[0]?['name']?.toString() ?? 'Unknown',
+          releaseYear: int.tryParse(r['date']?.toString().substring(0, 4) ?? ''),
+          dateAdded: DateTime.now(),
+          musicBrainzId: r['id']?.toString(),
+          recognitionConfidence: 0.5,
+        ));
+      }
+    } catch (_) {}
     if (results.isEmpty) {
       try { results.addAll(await _discogs.searchRelease(query)); } catch (_) {}
     }

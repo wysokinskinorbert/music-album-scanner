@@ -26,7 +26,6 @@ class ApiClient {
   Future<Map<String, dynamic>?> get(
     String path, {
     Map<String, dynamic>? queryParameters,
-    String? baseUrl,
   }) async {
     _requestCount++;
     _lastRequestTime = DateTime.now();
@@ -35,9 +34,6 @@ class ApiClient {
       final response = await _dio.get<Map<String, dynamic>>(
         path,
         queryParameters: queryParameters,
-        options: baseUrl != null
-            ? Options(baseUrl: baseUrl)
-            : null,
       );
       return response.data;
     } on DioException catch (e) {

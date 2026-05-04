@@ -37,16 +37,8 @@ class ScanResultBloc extends Bloc<ScanResultEvent, ScanResultState> {
       totalSteps: 4,
     ));
 
-    final result = await _recognition.recognize(
-      event.imagePath,
-      onProgress: (step, completed, total) {
-        emit(ScanResultProcessing(
-          currentStep: step,
-          stepsCompleted: completed,
-          totalSteps: total,
-        ));
-      },
-    );
+    emit(const ScanResultProcessing(currentStep: 'Scanning...'));
+    final result = await _recognition.recognizeFromImage(event.imagePath);
 
     if (result.isSuccess && result.album != null) {
       emit(ScanResultSuccess(
@@ -74,8 +66,7 @@ class ScanResultBloc extends Bloc<ScanResultEvent, ScanResultState> {
     emit(const ScanResultProcessing(currentStep: 'Searching...'));
 
     final result = await _recognition.searchByQuery(
-      event.artist,
-      event.album,
+      '${event.artist} ${event.album}'.trim(),
     );
 
     if (result.isSuccess && result.album != null) {

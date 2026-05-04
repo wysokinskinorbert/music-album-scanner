@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'data/models/album_model.dart';
+import 'data/models/album_model.g.dart';
 import 'data/repositories/album_repository.dart';
 import 'data/services/storage/local_storage_service.dart';
 import 'data/services/recognition_service.dart';
@@ -12,14 +13,10 @@ import 'features/home/home_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Hive
   final appDir = await getApplicationDocumentsDirectory();
   Hive.init(appDir.path);
-  if (!Hive.isAdapterRegistered(0)) {
-    Hive.registerAdapter(AlbumAdapter());
-  }
+  Hive.registerAdapter(AlbumAdapter());
 
-  // Initialize services
   final apiClient = ApiClient();
   final storage = LocalStorageService();
   await storage.init();

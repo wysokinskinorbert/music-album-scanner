@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../models/album_model.dart';
@@ -6,8 +7,21 @@ import '../../models/album_model.dart';
 class DiscogsService {
   final ApiClient _client;
   String? _token;
+  late final Dio _dio;
 
-  DiscogsService(this._client);
+  DiscogsService._(this._client) {
+    _dio = Dio(BaseOptions(
+      baseUrl: 'https://api.discogs.com',
+      headers: {'User-Agent': 'MusicAlbumScanner/1.0'},
+    ));
+  }
+
+  factory DiscogsService([ApiClient? client]) => DiscogsService._(client ?? ApiClient());
+    _dio = Dio(BaseOptions(
+      baseUrl: 'https://api.discogs.com',
+      headers: {'User-Agent': 'MusicAlbumScanner/1.0'},
+    ));
+  }
 
   void setToken(String token) => _token = token;
 
@@ -26,8 +40,8 @@ class DiscogsService {
       queryParams['token'] = _token;
     }
 
-    final response = await _client.get(
-      '${AppConstants.discogsBaseUrl}/database/search',
+    final response = await _dio.get(
+      '/database/search',
       queryParameters: queryParams,
     );
 

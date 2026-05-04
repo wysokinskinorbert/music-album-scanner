@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import '../../models/album_model.dart';
+import '../../models/album_model.g.dart';
 
 /// Local storage service using Hive for offline-first persistence.
 class LocalStorageService {
@@ -8,7 +9,7 @@ class LocalStorageService {
 
   Future<void> init() async {
     if (!Hive.isAdapterRegistered(0)) {
-      Hive.registerAdapter(AlbumAdapter());
+      // Adapter registered in main.dart;
     }
     _box = await Hive.openBox<Album>(_boxName);
   }

@@ -13,16 +13,15 @@ class MusicBrainzService {
     required String query,
     int limit = 5,
   }) async {
-    final response = await _client.get(
-      AppConstants.musicBrainzBaseUrl,
+    final data = await _client.get(
+      '/ws/2/release',
       queryParameters: {
         'query': query,
         'fmt': 'json',
         'limit': limit,
       },
     );
-
-    final data = response.data as Map<String, dynamic>;
+    if (data == null) return [];
     final releases = data['releases'] as List<dynamic>? ?? [];
     return releases.cast<Map<String, dynamic>>();
   }
