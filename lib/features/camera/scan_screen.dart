@@ -1,0 +1,259 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../core/theme/app_colors.dart';
+import 'bloc/camera_bloc.dart';
+import '../scan_result/scan_result_screen.dart';
+
+/// Camera screen for album scanning - optimized for one-handed use.
+class ScanScreen extends StatefulWidget {
+  const ScanScreen({super.key});
+
+  @override
+  State<ScanScreen> createState() => _ScanScreenState();
+}
+
+class _ScanScreenState extends State<ScanScreen> {
+  @override
+  void initState() {
+    super.initState();
+    context.read<CameraBloc>().add(InitializeCamera());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: BlocConsumer<CameraBloc, CameraState>(
+        listener: (context, state) {
+          if (state is CameraCaptureSuccess) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ScanResultScreen(imagePath: state.imagePath),
+              ),
+            );
+          }
+        },
+        builder: (context, state) {
+          return SafeArea(
+            child: Column(
+              children: [
+                // Top bar
+                _buildTopBar(state),
+                // Camera viewfinder
+                Expanded(child: _buildCameraPreview(state)),
+                // Bottom controls (one-handed zone)
+                _buildBottomControls(state),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTopBar(CameraState state) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            'Scan Album',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (state is CameraReadyState)
+            IconButton(
+              icon: Icon(
+                state.isFlashOn ? Icons.flash_on : Icons.flash_off,
+                color: AppColors.textPrimary,
+              ),
+              onPressed: () => context.read<CameraBloc>().add(ToggleFlash()),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCameraPreview(CameraState state) {
+    if (state is CameraInitializing) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: AppColors.primary),
+            SizedBox(height: 16),
+            Text(
+              'Initializing camera...',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (state is CameraError) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+            const SizedBox(height: 16),
+            Text(
+              state.message,
+              style: const TextStyle(color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final bloc = context.read<CameraBloc>();
+    if (bloc.controller != null && bloc.controller!.value.isInitialized) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CameraPreview(bloc.controller!),
+              // Scan frame overlay
+              Center(
+                child: Container(
+                  width: 280,
+                  height: 280,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.primary, width: 2),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildBottomControls(CameraState state) {
+    final isCapturing = state is CameraCapturing;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          // Gallery button
+          GestureDetector(
+            onTap: _pickFromGallery,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.photo_library_outlined,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          // Capture button
+          GestureDetector(
+            onTap: isCapturing
+                ? null
+                : () => context.read<CameraBloc>().add(CapturePhoto()),
+            child: Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: isCapturing
+                    ? null
+                    : AppColors.primaryGradient,
+                color: isCapturing ? AppColors.surfaceLight : null,
+                border: Border.all(
+                  color: AppColors.primaryLight,
+                  width: 3,
+                ),
+              ),
+              child: isCapturing
+                  ? const Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    )
+                  : const Icon(Icons.camera_alt, color: Colors.white, size: 32),
+            ),
+          ),
+          // Switch camera
+          GestureDetector(
+            onTap: () => context.read<CameraBloc>().add(SwitchCamera()),
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.flip_camera_ios,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickFromGallery() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1920,
+      maxHeight: 1920,
+      imageQuality: 90,
+    );
+    if (image != null && mounted) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ScanResultScreen(imagePath: image.path),
+        ),
+      );
+    }
+  }
+}
+
+/// Displays the camera preview.
+class CameraPreview extends StatelessWidget {
+  final dynamic controller;
+
+  const CameraPreview(this.controller, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // This is a simplified placeholder.
+    // In production, use CameraPreview from camera package.
+    return Container(
+      color: Colors.black,
+      child: const Center(
+        child: Icon(Icons.videocam, size: 64, color: AppColors.textTertiary),
+      ),
+    );
+  }
+}
