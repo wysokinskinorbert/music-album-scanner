@@ -1,68 +1,71 @@
-     1|     1|name: music_album_scanner
-     2|     2|description: AI-powered music album scanner and collector for Android.
-     3|     3|publish_to: 'none'
-     4|     4|version: 0.4.0+4
-     5|     5|
-     6|     6|environment:
-     7|     7|  sdk: '>=3.0.0 <4.0.0'
-     8|     8|
-     9|     9|dependencies:
-    10|    10|  flutter:
-    11|    11|    sdk: flutter
-    12|    12|
-    13|    13|  # State Management
-    14|    14|  flutter_bloc: ^9.1.0
-    15|    15|  equatable: ^2.0.7
-    16|    16|
-    17|    17|  # Local Storage
-    18|    18|  hive: ^2.2.3
-    19|    19|  hive_flutter: ^1.1.0
-    20|    20|  path_provider: ^2.1.5
-    21|    21|  shared_preferences: ^2.5.3
-    22|    22|
-    23|    23|  # Network
-    24|    24|  dio: ^5.8.0+1
-    25|    25|  connectivity_plus: ^6.1.4
-    26|    26|
-    27|    27|  # Camera & Images
-    28|    28|  camera: ^0.11.1
-    29|    29|  image_picker: ^1.1.2
-    30|    30|  image: ^4.5.4
-    31|    31|
-    32|    32|  # Google ML Kit
-    33|    33|  google_mlkit_text_recognition: ^0.14.0
-    34|    34|  google_mlkit_image_labeling: ^0.12.0
-    35|    35|  google_mlkit_barcode_scanning: ^0.12.0
-    36|    36|
-    37|    37|  # ML / TFLite
-    38|    38|  tflite_flutter: ^0.11.0
-    39|    39|  tflite_flutter_helper_plus: ^0.0.4
-    40|    40|
-    41|    41|  # UI
-    42|    42|  flutter_staggered_grid_view: ^0.7.0
-    43|    43|  cached_network_image: ^3.4.1
-    44|    44|  shimmer: ^3.0.0
-    45|  lottie: ^3.1.0
-  pdf: ^3.10.8
-  csv: ^6.0.0
-  file_picker: ^8.0.0
-    46|  animations: ^2.0.11
-    47|    45|  share_plus: ^10.1.4
-    48|    46|
-    49|    47|  # Utils
-    50|    48|  uuid: ^4.5.1
-    51|    49|  intl: ^0.20.2
-    52|    50|  url_launcher: ^6.3.1
-    53|    51|  permission_handler: ^11.4.0
-    54|    52|  logger: ^2.6.0
-    55|    53|
-    56|    54|dev_dependencies:
-    57|    55|  flutter_test:
-    58|    56|    sdk: flutter
-    59|    57|  flutter_lints: ^5.0.0
-    60|    58|  hive_generator: ^2.0.1
-    61|    59|  build_runner: ^2.4.15
-    62|    60|
-    63|    61|flutter:
-    64|    62|  uses-material-design: true
-    65|    63|
+     1|     1|     1|name: music_album_scanner
+     2|     2|     2|description: AI-powered music album scanner and collector for Android.
+     3|     3|     3|publish_to: 'none'
+     4|     4|     4|version: 0.4.0+4
+     5|     5|     5|
+     6|     6|     6|environment:
+     7|     7|     7|  sdk: '>=3.0.0 <4.0.0'
+     8|     8|     8|
+     9|     9|     9|dependencies:
+    10|    10|    10|  flutter:
+    11|    11|    11|    sdk: flutter
+    12|    12|    12|
+    13|    13|    13|  # State Management
+    14|    14|    14|  flutter_bloc: ^9.1.0
+    15|    15|    15|  equatable: ^2.0.7
+    16|    16|    16|
+    17|    17|    17|  # Local Storage
+    18|    18|    18|  hive: ^2.2.3
+    19|    19|    19|  hive_flutter: ^1.1.0
+    20|    20|    20|  path_provider: ^2.1.5
+    21|    21|    21|  shared_preferences: ^2.5.3
+    22|    22|    22|
+    23|    23|    23|  # Network
+    24|    24|    24|  dio: ^5.8.0+1
+    25|    25|    25|  connectivity_plus: ^6.1.4
+    26|    26|    26|
+    27|    27|    27|  # Camera & Images
+    28|    28|    28|  camera: ^0.11.1
+    29|    29|    29|  image_picker: ^1.1.2
+    30|    30|    30|  image: ^4.5.4
+    31|    31|    31|
+    32|    32|    32|  # Google ML Kit
+    33|    33|    33|  google_mlkit_text_recognition: ^0.14.0
+    34|    34|    34|  google_mlkit_image_labeling: ^0.12.0
+    35|    35|    35|  google_mlkit_barcode_scanning: ^0.12.0
+    36|    36|    36|
+    37|    37|    37|  # ML / TFLite
+    38|    38|    38|  tflite_flutter: ^0.11.0
+    39|    39|    39|  tflite_flutter_helper_plus: ^0.0.4
+    40|    40|    40|
+    41|    41|    41|  # UI
+    42|    42|    42|  flutter_staggered_grid_view: ^0.7.0
+    43|    43|    43|  cached_network_image: ^3.4.1
+    44|    44|    44|  shimmer: ^3.0.0
+    45|    45|  lottie: ^3.1.0
+    46|  pdf: ^3.10.8
+    47|  csv: ^6.0.0
+    48|  file_picker: ^8.0.0
+    49|    46|  animations: ^2.0.11
+    50|    47|    45|  share_plus: ^10.1.4
+    51|    48|    46|
+    52|    49|    47|  # Utils
+    53|    50|    48|  uuid: ^4.5.1
+    54|    51|    49|  intl: ^0.20.2
+    55|    52|    50|  url_launcher: ^6.3.1
+    56|    53|    51|  permission_handler: ^11.4.0
+    57|    54|    52|  logger: ^2.6.0
+    58|    55|    53|
+    59|    56|    54|dev_dependencies:
+    60|    57|    55|  flutter_test:
+  bloc_test: ^9.1.7
+  mocktail: ^1.0.4
+  network_image_mock: ^2.1.1
+    61|    58|    56|    sdk: flutter
+    62|    59|    57|  flutter_lints: ^5.0.0
+    63|    60|    58|  hive_generator: ^2.0.1
+    64|    61|    59|  build_runner: ^2.4.15
+    65|    62|    60|
+    66|    63|    61|flutter:
+    67|    64|    62|  uses-material-design: true
+    68|    65|    63|

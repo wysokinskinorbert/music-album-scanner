@@ -64,7 +64,7 @@
 - [x] Updated main.dart with onboarding gate + haptic init
 - [x] Updated home screen with polished nav bar (gradient scan button)
 
-## v0.7.0 - Sharing & Social (Current)
+## v0.7.0 - Sharing & Social
 - [x] Share service (text, text+image, album list, widget as image, copy to clipboard)
 - [x] Instagram Stories format generator (1080x1920, gradient overlay, album cover, branding)
 - [x] Collection infographic generator (stats visual as 1080x1920 PNG)
@@ -74,21 +74,39 @@
 - [x] Share/Export screen (3 tabs: Share, Instagram, Export)
 - [x] Import screen (format picker, file picker, progress, result stats)
 - [x] Settings: Share & Export link + Import Collection link
-- [x] Updated version strings
 
-## v0.8.0 - Cloud Sync (Optional)
+## v0.8.0 - Recognition Polish & Testing (Current)
+- [x] Custom exception hierarchy (NetworkException, ApiException, StorageException, RecognitionException, PermissionException)
+- [x] Error mapper (DioException -> AppException, user-friendly messages in Polish)
+- [x] Retry wrapper with exponential backoff + jitter (configurable presets)
+- [x] Diagnostics service (pipeline logging, aggregated stats, trim, export)
+- [x] Test helpers (AlbumFactory, RecognitionResultFactory, constants)
+- [x] Hive test setup (in-memory, auto-cleanup)
+- [x] Unit tests: AlbumModel (43 tests), ScanResult/RecognitionResult (42 tests)
+- [x] Unit tests: ApiClient (16 tests), MusicBrainzService, DiscogsService
+- [x] Unit tests: Recognition pipeline (645 lines)
+- [x] Unit tests: AlbumRepository (288 lines)
+- [x] BLoC tests: CollectionBloc (335 lines), ScanResultBloc (381 lines)
+- [x] Widget tests: HomeScreen, CollectionScreen
+- [x] Unit tests: Exceptions, Retry wrapper, DiagnosticsService
+- [x] Empty state widget (8 factory variants: collection, search, noRecognition, badPhoto, offline, wishlist, noDuplicates, error)
+- [x] Error banner widget (user-friendly error display with retry/dismiss)
+- [x] Photo quality indicator (good/too dark/too bright/too blurry)
+
+## v0.9.0 - Beta Prep (Next)
+- [ ] CI/CD pipeline (GitHub Actions: analyze, test, build APK)
+- [ ] i18n setup (English + Polish, ARB files)
+- [ ] Performance profiling (scan latency, memory, startup time)
+- [ ] Accessibility audit (semantic labels, contrast ratios, screen reader)
+- [ ] Full integration test suite (end-to-end scan flow)
+- [ ] README.md update with screenshots and setup instructions
+- [ ] Google Play Store asset preparation
+
+## v0.10.0 - Cloud Sync (Deferred)
 - [ ] Firebase / Supabase integration
 - [ ] Cross-device sync
 - [ ] Cloud backup / restore
 - [ ] Optional user accounts
-
-## v0.9.0 - Beta
-- [ ] Full test coverage
-- [ ] Performance profiling
-- [ ] Accessibility audit
-- [ ] i18n
-- [ ] CI/CD pipeline
-- [ ] Google Play Store preparation
 
 ## v1.0.0 - Production Release
 - [ ] Google Play Store submission
