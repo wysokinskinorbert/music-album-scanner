@@ -45,10 +45,7 @@ class AutoEnhancementService {
     final adjustments = <String, double>{};
 
     if (mode == EnhancementMode.auto) {
-      // Analyze image statistics
       final stats = _analyzeImage(image);
-
-      // Decide adjustments based on analysis
       adjustments['brightness'] = _autoBrightness(stats);
       adjustments['contrast'] = _autoContrast(stats);
       adjustments['saturation'] = _autoSaturation(stats);
@@ -61,15 +58,15 @@ class AutoEnhancementService {
     var result = image;
 
     if (adjustments['brightness'] != null && adjustments['brightness']! != 0) {
-      result = img.brightness(result, value: adjustments['brightness']!.round());
+      result = img.adjustColor(result, brightness: adjustments['brightness']!);
     }
 
     if (adjustments['contrast'] != null && adjustments['contrast']! != 0) {
-      result = img.contrast(result, value: adjustments['contrast']!.round());
+      result = img.adjustColor(result, contrast: adjustments['contrast']!);
     }
 
     if (adjustments['saturation'] != null && adjustments['saturation']! != 1.0) {
-      result = img.color_saturation(result, value: adjustments['saturation']!);
+      result = img.adjustColor(result, saturation: adjustments['saturation']!);
     }
 
     if (adjustments['gamma'] != null && adjustments['gamma']! != 1.0) {
@@ -92,23 +89,18 @@ class AutoEnhancementService {
   }
 
   /// Quick enhance for OCR optimization.
-  /// Increases contrast and sharpness specifically for text readability.
   img.Image enhanceForOcr(img.Image image) {
     var result = image;
 
-    // Convert to grayscale for better text contrast
     result = img.grayscale(result);
+    result = img.adjustColor(result, contrast: 30);
 
-    // Increase contrast significantly
-    result = img.contrast(result, value: 30);
-
-    // Sharpen
     result = img.convolution(
       result,
       filter: <double>[0, -1, 0, -1, 5, -1, 0, -1, 0],
     );
 
-    // Binarize (threshold)
+    // Binarize
     for (int y = 0; y < result.height; y++) {
       for (int x = 0; x < result.width; x++) {
         final pixel = result.getPixel(x, y);
@@ -121,25 +113,19 @@ class AutoEnhancementService {
   }
 
   /// Enhance specifically for ML model input.
-  /// Normalizes the image for best recognition accuracy.
   img.Image enhanceForMl(img.Image image) {
     var result = image;
 
-    // Normalize brightness
     final stats = _analyzeImage(image);
     if (stats.meanBrightness < 80) {
-      result = img.brightness(result, value: 30);
+      result = img.adjustColor(result, brightness: 30);
     } else if (stats.meanBrightness > 200) {
-      result = img.brightness(result, value: -20);
+      result = img.adjustColor(result, brightness: -20);
     }
 
-    // Moderate contrast boost
-    result = img.contrast(result, value: 15);
+    result = img.adjustColor(result, contrast: 15);
+    result = img.adjustColor(result, saturation: 1.1);
 
-    // Slight saturation boost for colorful covers
-    result = img.color_saturation(result, value: 1.1);
-
-    // Mild sharpening
     result = img.convolution(
       result,
       filter: <double>[0, -0.3, 0, -0.3, 2.2, -0.3, 0, -0.3, 0],
@@ -152,14 +138,13 @@ class AutoEnhancementService {
   // Histogram Analysis
   // ==========================================
 
-  /// Analyze image brightness, contrast, and color distribution.
   ImageStats _analyzeImage(img.Image image) {
     int totalR = 0, totalG = 0, totalB = 0;
     int minR = 255, minG = 255, minB = 255;
     int maxR = 0, maxG = 0, maxB = 0;
 
     final pixelCount = image.width * image.height;
-    final step = pixelCount > 100000 ? 4 : 1; // Sample for large images
+    final step = pixelCount > 100000 ? 4 : 1;
 
     int sampledPixels = 0;
     for (int y = 0; y < image.height; y += step) {
@@ -184,6 +169,7 @@ class AutoEnhancementService {
       }
     }
 
+    if (sampledPixels == 0) sampledPixels = 1;
     final meanR = totalR / sampledPixels;
     final meanG = totalG / sampledPixels;
     final meanB = totalB / sampledPixels;
@@ -217,17 +203,16 @@ class AutoEnhancementService {
   double _autoContrast(ImageStats stats) {
     if (stats.isLowContrast) return 25;
     if (stats.isHighContrast) return -10;
-    return 10; // Slight boost for album covers
+    return 10;
   }
 
   double _autoSaturation(ImageStats stats) {
-    // Album covers benefit from slightly boosted saturation
     return 1.15;
   }
 
   double _autoGamma(ImageStats stats) {
-    if (stats.isDark) return 0.85; // Brighten darks
-    if (stats.isBright) return 1.15; // Darken lights
+    if (stats.isDark) return 0.85;
+    if (stats.isBright) return 1.15;
     return 1.0;
   }
 
@@ -268,7 +253,7 @@ class AutoEnhancementService {
           'saturation': 1.0,
           'gamma': 0.75,
         },
-        EnhancementMode.auto => {}, // Handled separately
+        EnhancementMode.auto => {},
       };
 }
 

@@ -10,14 +10,6 @@ import '../models/recognition_result.dart';
 import 'package:logger/logger.dart';
 
 /// Multi-strategy album recognition orchestrator.
-///
-/// Pipeline order (stops at first confident match):
-///   1. Barcode scan -> MusicBrainz direct lookup (95%)
-///   2. OCR text -> MusicBrainz search (85%)
-///   3. OCR text -> Discogs fallback (75%)
-///   4. Visual labels -> context-assisted search (60%)
-///   5. Offline TFLite model / embedding match (50-80%)
-///   6. Fail -> return best partial result
 class RecognitionService {
   final MusicBrainzService _musicBrainz;
   final DiscogsService _discogs;
@@ -53,7 +45,6 @@ class RecognitionService {
     int completed = 0;
     final pipelineLog = <String>[];
     String? extractedText;
-    String? coverType;
 
     void progress(String step) {
       pipelineLog.add(step);
@@ -61,19 +52,19 @@ class RecognitionService {
     }
 
     try {
-      // ==========================================
       // STEP 1: Barcode Scan
-      // ==========================================
       progress('Scanning for barcode...');
-      final barcodeResult = await _barcodeScanner.scanFromFile(imagePath);
+      final barcodeResult = await _barcodeScanner.scanImage(imagePath);
 
-      if (barcodeResult != null && barcodeResult.isAlbumBarcode) {
+      if (barcodeResult.hasBarcode && barcodeResult.isAlbumBarcode) {
         completed++;
-        progress('Barcode found: \${barcodeResult.displayValue}');
+        progress('Barcode found: ${barcodeResult.barcode}');
 
-        if (await _connectivity.isOnline) {
-          final album = await _musicBrainz.searchByBarcode(barcodeResult.displayValue);
-          if (album != null) {
+        if (_connectivity.isOnline) {
+          final mbResults = await _musicBrainz.searchByBarcode(barcodeResult.barcode);
+          if (mbResults.isNotEmpty) {
+            final parsed = _musicBrainz.parseRelease(mbResults.first);
+            final album = _parsedToAlbum(parsed, userPhotoPath: imagePath);
             progress('MusicBrainz barcode match!');
             return _success(
               album: album,
@@ -87,42 +78,33 @@ class RecognitionService {
       }
       completed++;
 
-      // If offline, skip to offline recognition
-      if (!await _connectivity.isOnline) {
+      if (!_connectivity.isOnline) {
         progress('Offline mode - trying local recognition...');
         return await _tryOfflineRecognition(
           imagePath, pipelineLog, extractedText,
         );
       }
 
-      // ==========================================
       // STEP 2: OCR Text Extraction + MusicBrainz
-      // ==========================================
       progress('Extracting text from cover...');
-      final textResult = await _textExtractor.extractTextFromFile(imagePath);
-      extractedText = textResult?.fullText;
+      final textResult = await _textExtractor.extractText(imagePath);
+      extractedText = textResult.rawText;
 
-      if (textResult != null && textResult.searchQueries.isNotEmpty) {
-        progress('OCR: found \${textResult.searchQueries.length} queries');
+      if (textResult.hasText) {
+        final queries = _textExtractor.generateSearchQueries(textResult);
+        progress('OCR: found ${queries.length} queries');
 
-        for (final query in textResult.searchQueries) {
-          final mbResults = await _musicBrainz.searchRelease(query);
+        for (final query in queries) {
+          final mbResults = await _musicBrainz.searchRelease(query: query);
           if (mbResults.isNotEmpty) {
             completed++;
-            final best = mbResults.first;
+            final parsed = _musicBrainz.parseRelease(mbResults.first);
+            final album = _parsedToAlbum(parsed, userPhotoPath: imagePath);
             final confidence = mbResults.length == 1 ? 0.85 : 0.80;
 
-            // Enrich with full release details
-            Album? enriched;
-            if (best.musicBrainzId != null) {
-              enriched = await _musicBrainz.getReleaseDetails(
-                best.musicBrainzId!,
-              );
-            }
-
-            progress('MusicBrainz match: \${best.title}');
+            progress('MusicBrainz match: ${album.title}');
             return _success(
-              album: enriched ?? best,
+              album: album,
               confidence: confidence,
               source: 'MusicBrainz (OCR)',
               pipelineSummary: pipelineLog.join(' -> '),
@@ -133,21 +115,22 @@ class RecognitionService {
       }
       completed++;
 
-      // ==========================================
       // STEP 3: Discogs Fallback
-      // ==========================================
       progress('Searching Discogs...');
-      final discogsQueries = textResult?.searchQueries ?? [];
+      final discogsQueries = textResult.hasText
+          ? _textExtractor.generateSearchQueries(textResult)
+          : <String>[];
 
       for (final query in discogsQueries.take(2)) {
-        final discogsResults = await _discogs.searchRelease(query);
+        final discogsResults = await _discogs.search(query: query);
         if (discogsResults.isNotEmpty) {
           completed++;
-          final best = discogsResults.first;
+          final parsed = _discogs.parseRelease(discogsResults.first);
+          final album = _parsedToAlbum(parsed, userPhotoPath: imagePath);
 
-          progress('Discogs match: \${best.title}');
+          progress('Discogs match: ${album.title}');
           return _success(
-            album: best,
+            album: album,
             confidence: 0.75,
             source: 'Discogs (OCR)',
             pipelineSummary: pipelineLog.join(' -> '),
@@ -157,28 +140,21 @@ class RecognitionService {
       }
       completed++;
 
-      // ==========================================
       // STEP 4: Visual Analysis
-      // ==========================================
       progress('Analyzing cover artwork...');
-      final labelResult = await _imageLabeler.analyzeFromFile(imagePath);
-      coverType = labelResult.coverType;
+      final coverAnalysis = await _imageLabeler.analyzeCover(imagePath);
 
-      if (labelResult.labels.isNotEmpty) {
-        // Build a search query from visual labels
-        final visualQuery = labelResult.labels
-            .take(3)
-            .map((l) => l.label)
-            .join(' ');
+      if (coverAnalysis.labels.isNotEmpty) {
+        final visualQuery = coverAnalysis.labelTexts.take(3).join(' ');
         progress('Visual: "$visualQuery"');
 
-        // Try MusicBrainz with visual context
-        final mbResults = await _musicBrainz.searchRelease(visualQuery);
+        final mbResults = await _musicBrainz.searchRelease(query: visualQuery);
         if (mbResults.isNotEmpty) {
-          final best = mbResults.first;
-          progress('Visual match: \${best.title}');
+          final parsed = _musicBrainz.parseRelease(mbResults.first);
+          final album = _parsedToAlbum(parsed, userPhotoPath: imagePath);
+          progress('Visual match: ${album.title}');
           return _success(
-            album: best,
+            album: album,
             confidence: 0.60,
             source: 'Visual Analysis',
             pipelineSummary: pipelineLog.join(' -> '),
@@ -188,29 +164,25 @@ class RecognitionService {
       }
       completed++;
 
-      // ==========================================
-      // STEP 5: Offline TFLite / Embedding Match
-      // ==========================================
+      // STEP 5: Offline
       if (_offlineService != null && _offlineService.isAvailable) {
         progress('Trying offline recognition...');
         final offlineResult = await _offlineService.recognize(imagePath);
 
         if (offlineResult.recognized && offlineResult.confidence >= 0.50) {
           final album = offlineResult.toAlbum(photoPath: imagePath);
-          progress('Offline match: \${album.title}');
+          progress('Offline match: ${album.title}');
           return _success(
             album: album,
             confidence: offlineResult.confidence,
-            source: 'Offline (\${offlineResult.method})',
+            source: 'Offline (${offlineResult.method})',
             pipelineSummary: pipelineLog.join(' -> '),
             extractedText: extractedText,
           );
         }
       }
 
-      // ==========================================
       // ALL FAILED
-      // ==========================================
       progress('No match found');
       return RecognitionResult(
         state: RecognitionState.failed,
@@ -222,9 +194,52 @@ class RecognitionService {
       _logger.e('Recognition pipeline error: $e');
       return RecognitionResult(
         state: RecognitionState.error,
-        message: 'Recognition error: \$e',
+        message: 'Recognition error: $e',
         pipelineSummary: pipelineLog.join(' -> '),
         extractedText: extractedText,
+      );
+    }
+  }
+
+  /// Text-based search for manual lookup.
+  Future<RecognitionResult> searchByQuery(String artist, String albumTitle) async {
+    try {
+      final query = '$artist $albumTitle';
+
+      // Try MusicBrainz first
+      final mbResults = await _musicBrainz.searchRelease(query: query);
+      if (mbResults.isNotEmpty) {
+        final parsed = _musicBrainz.parseRelease(mbResults.first);
+        final album = _parsedToAlbum(parsed);
+        return RecognitionResult(
+          state: RecognitionState.success,
+          album: album,
+          confidence: 0.85,
+          source: 'MusicBrainz',
+        );
+      }
+
+      // Try Discogs
+      final discogsResults = await _discogs.search(query: query);
+      if (discogsResults.isNotEmpty) {
+        final parsed = _discogs.parseRelease(discogsResults.first);
+        final album = _parsedToAlbum(parsed);
+        return RecognitionResult(
+          state: RecognitionState.success,
+          album: album,
+          confidence: 0.75,
+          source: 'Discogs',
+        );
+      }
+
+      return RecognitionResult(
+        state: RecognitionState.failed,
+        message: 'No results found for "$artist - $albumTitle"',
+      );
+    } catch (e) {
+      return RecognitionResult(
+        state: RecognitionState.error,
+        message: 'Search error: $e',
       );
     }
   }
@@ -238,7 +253,7 @@ class RecognitionService {
     if (_offlineService == null || !_offlineService.isAvailable) {
       return RecognitionResult(
         state: RecognitionState.failed,
-        message: 'No internet and offline model not available. Download the model in Settings first.',
+        message: 'No internet and offline model not available.',
         pipelineSummary: pipelineLog.join(' -> '),
         extractedText: extractedText,
       );
@@ -251,7 +266,7 @@ class RecognitionService {
       return _success(
         album: album,
         confidence: result.confidence,
-        source: 'Offline (\${result.method})',
+        source: 'Offline (${result.method})',
         pipelineSummary: pipelineLog.join(' -> '),
         extractedText: extractedText,
       );
@@ -272,9 +287,8 @@ class RecognitionService {
     required String pipelineSummary,
     String? extractedText,
   }) {
-    // If offline service is available, add to embedding index
     if (_offlineService != null && album.userPhotoPath != null) {
-      _offlineService.addToIndex(album); // Fire-and-forget
+      _offlineService.addToIndex(album);
     }
 
     return RecognitionResult(
@@ -284,6 +298,27 @@ class RecognitionService {
       source: source,
       pipelineSummary: pipelineSummary,
       extractedText: extractedText,
+    );
+  }
+
+  /// Convert parsed API data map to Album model.
+  Album _parsedToAlbum(Map<String, dynamic> data, {String? userPhotoPath}) {
+    return Album(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: data['title'] as String? ?? 'Unknown',
+      artist: data['artist'] as String? ?? 'Unknown',
+      releaseYear: data['releaseYear'] as int?,
+      label: data['label'] as String?,
+      genre: data['genre'] as String?,
+      tracklist: (data['tracklist'] as List<dynamic>?)
+          ?.map((t) => t.toString())
+          .toList() ?? [],
+      coverArtUrl: data['coverArtUrl'] as String?,
+      userPhotoPath: userPhotoPath,
+      dateAdded: DateTime.now(),
+      musicBrainzId: data['musicBrainzId'] as String?,
+      discogsId: data['discogsId']?.toString(),
+      country: data['country'] as String?,
     );
   }
 }

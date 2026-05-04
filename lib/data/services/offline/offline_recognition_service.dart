@@ -1,4 +1,4 @@
-import '../../core/network/connectivity_service.dart';
+import 'package:music_album_scanner/core/network/connectivity_service.dart';
 import '../ml/model/model_download_manager.dart';
 import '../ml/model/model_info.dart';
 import '../ml/tflite_inference_service.dart';
@@ -31,9 +31,9 @@ class OfflineRecognitionResult {
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: title ?? 'Unknown Album',
         artist: artist ?? 'Unknown Artist',
-        confidence: confidence,
-        source: 'offline ($method)',
+        recognitionConfidence: confidence,
         userPhotoPath: photoPath,
+        dateAdded: DateTime.now(),
       );
 }
 

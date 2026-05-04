@@ -13,9 +13,6 @@ class ScanResultBloc extends Bloc<ScanResultEvent, ScanResultState> {
   final RecognitionService _recognition;
   final AlbumRepository _repository;
 
-  // Keep pipeline results for multiple match selection
-  RecognitionPipelineResult? _lastPipelineResult;
-
   ScanResultBloc({
     required RecognitionService recognition,
     required AlbumRepository repository,
@@ -34,54 +31,38 @@ class ScanResultBloc extends Bloc<ScanResultEvent, ScanResultState> {
     StartRecognition event,
     Emitter<ScanResultState> emit,
   ) async {
-    // Step 1: Barcode scan
     emit(const ScanResultProcessing(
       currentStep: 'Scanning barcode...',
       stepsCompleted: 0,
       totalSteps: 4,
     ));
 
-    final pipelineResult = await _recognition.recognizeAlbum(event.imagePath);
-    _lastPipelineResult = pipelineResult;
+    final result = await _recognition.recognize(
+      event.imagePath,
+      onProgress: (step, completed, total) {
+        emit(ScanResultProcessing(
+          currentStep: step,
+          stepsCompleted: completed,
+          totalSteps: total,
+        ));
+      },
+    );
 
-    final result = pipelineResult.bestResult;
-
-    if (result.isSuccess) {
-      final rawData = result.rawApiData ?? {};
-      final album = Album(
-        id: const Uuid().v4(),
-        title: rawData['title'] ?? result.albumTitle ?? 'Unknown',
-        artist: rawData['artist'] ?? result.artist ?? 'Unknown',
-        releaseYear: rawData['releaseYear'],
-        label: rawData['label'],
-        genre: rawData['genre'],
-        tracklist: List<String>.from(rawData['tracklist'] ?? []),
-        coverArtUrl: rawData['coverArtUrl'],
-        userPhotoPath: event.imagePath,
-        dateAdded: DateTime.now(),
-        musicBrainzId: rawData['musicBrainzId'],
-        discogsId: rawData['discogsId'],
-        recognitionConfidence: result.confidence,
-        barcode: rawData['barcode'],
-        country: rawData['country'],
-      );
-
+    if (result.isSuccess && result.album != null) {
       emit(ScanResultSuccess(
-        album: album,
+        album: result.album!,
         source: result.sourceLabel,
         confidence: result.confidence,
         imagePath: event.imagePath,
-        pipelineSummary: pipelineResult.pipelineSummary,
-        extractedText: pipelineResult.extractedText?.rawText,
+        pipelineSummary: result.pipelineSummary,
+        extractedText: result.extractedText,
       ));
     } else {
       emit(ScanResultFailure(
-        message: result.errorMessage ?? 'Recognition failed',
+        message: result.errorMessage ?? result.message ?? 'Recognition failed',
         imagePath: event.imagePath,
-        pipelineSummary: pipelineResult.pipelineSummary,
-        extractedText: pipelineResult.extractedText?.rawText,
-        stepsAttempted: pipelineResult.stepsAttempted,
-        stepsSucceeded: pipelineResult.stepsSucceeded,
+        pipelineSummary: result.pipelineSummary,
+        extractedText: result.extractedText,
       ));
     }
   }
@@ -97,30 +78,15 @@ class ScanResultBloc extends Bloc<ScanResultEvent, ScanResultState> {
       event.album,
     );
 
-    if (result.isSuccess && result.rawApiData != null) {
-      final rawData = result.rawApiData!;
-      final album = Album(
-        id: const Uuid().v4(),
-        title: rawData['title'] ?? event.album,
-        artist: rawData['artist'] ?? event.artist,
-        releaseYear: rawData['releaseYear'],
-        label: rawData['label'],
-        genre: rawData['genre'],
-        tracklist: List<String>.from(rawData['tracklist'] ?? []),
-        coverArtUrl: rawData['coverArtUrl'],
-        dateAdded: DateTime.now(),
-        musicBrainzId: rawData['musicBrainzId'],
-        discogsId: rawData['discogsId'],
-        recognitionConfidence: result.confidence,
-      );
+    if (result.isSuccess && result.album != null) {
       emit(ScanResultSuccess(
-        album: album,
+        album: result.album!,
         source: result.sourceLabel,
         confidence: result.confidence,
       ));
     } else {
       emit(ScanResultFailure(
-        message: result.errorMessage ?? 'No results found for "\${event.artist} - \${event.album}"',
+        message: result.errorMessage ?? result.message ?? 'No results found for "${event.artist} - ${event.album}"',
       ));
     }
   }

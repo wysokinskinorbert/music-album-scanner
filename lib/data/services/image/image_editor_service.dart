@@ -118,13 +118,11 @@ class ImageEditorService {
     int cropW, cropH, cropX, cropY;
 
     if (currentAspect > aspectRatio) {
-      // Too wide - crop sides
       cropH = image.height;
       cropW = (image.height * aspectRatio).round();
       cropX = (image.width - cropW) ~/ 2;
       cropY = 0;
     } else {
-      // Too tall - crop top/bottom
       cropW = image.width;
       cropH = (image.width / aspectRatio).round();
       cropX = 0;
@@ -161,19 +159,19 @@ class ImageEditorService {
   /// Adjust brightness (-100 to 100).
   img.Image adjustBrightness(img.Image image, int value) {
     if (value == 0) return image;
-    return img.brightness(image, value: value);
+    return img.adjustColor(image, brightness: value.toDouble());
   }
 
   /// Adjust contrast (-100 to 100).
   img.Image adjustContrast(img.Image image, int value) {
     if (value == 0) return image;
-    return img.contrast(image, value: value);
+    return img.adjustColor(image, contrast: value.toDouble());
   }
 
   /// Adjust saturation (0.0 = grayscale, 1.0 = normal, 2.0 = vivid).
   img.Image adjustSaturation(img.Image image, double value) {
     if (value == 1.0) return image;
-    return img.color_saturation(image, value: value);
+    return img.adjustColor(image, saturation: value);
   }
 
   /// Adjust gamma (0.1 to 3.0, 1.0 = no change).
@@ -251,13 +249,13 @@ class ImageEditorService {
   // ==========================================
 
   /// Get image dimensions without full decode.
-  Future<{int width, int height}> getImageDimensions(String path) async {
+  Future<ImageDimensions> getImageDimensions(String path) async {
     final image = await loadImage(path);
-    return (width: image?.width ?? 0, height: image?.height ?? 0);
+    return ImageDimensions(width: image?.width ?? 0, height: image?.height ?? 0);
   }
 
   /// Encode image to JPEG bytes.
-  Uint8List encodeJpeg(img.Image image, {int quality = 95}) {
+  Uint8List encodeJpg(img.Image image, {int quality = 95}) {
     return Uint8List.fromList(img.encodeJpg(image, quality: quality));
   }
 
@@ -265,4 +263,11 @@ class ImageEditorService {
   Uint8List encodePng(img.Image image) {
     return Uint8List.fromList(img.encodePng(image));
   }
+}
+
+/// Simple dimensions holder.
+class ImageDimensions {
+  final int width;
+  final int height;
+  const ImageDimensions({required this.width, required this.height});
 }

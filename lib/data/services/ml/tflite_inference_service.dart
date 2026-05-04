@@ -1,151 +1,195 @@
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
-import 'package:logger/logger.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
-import 'ml/model/model_download_manager.dart';
-import 'ml/model/model_info.dart';
+import 'package:logger/logger.dart';
+import 'model/model_download_manager.dart';
+import 'model/model_info.dart';
 
-/// Result from TFLite cover recognition.
-class CoverRecognitionResult {
+/// A single classification result from the model.
+class ClassificationResult {
   final String label;
   final double confidence;
-  final List<RecognitionCandidate> candidates;
 
-  const CoverRecognitionResult({
+  const ClassificationResult({
     required this.label,
     required this.confidence,
-    this.candidates = const [],
   });
 
-  bool get isConfident => confidence >= 0.5;
-
-  @override
-  String toString() => 'CoverResult($label, ${(confidence * 100).toStringAsFixed(1)}%)';
+  bool get isConfident => confidence >= 0.75;
 }
 
-/// A candidate match from the model.
-class RecognitionCandidate {
-  final String label;
-  final double confidence;
-
-  const RecognitionCandidate({required this.label, required this.confidence});
-}
-
-/// Runs TFLite inference on album cover images.
+/// TFLite-based inference service for album cover recognition.
+/// Handles both classification (what album is this?) and
+/// embedding generation (find similar covers).
 class TfliteInferenceService {
   final ModelDownloadManager _downloadManager;
   final Logger _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
-  Interpreter? _recognizerInterpreter;
-  Interpreter? _embeddingInterpreter;
-  bool _isInitialized = false;
+  Interpreter? _classifier;
+  Interpreter? _embedder;
 
-  // Model input specs (MobileNet)
-  static const int _inputSize = 224;
+  static const int _classifierInputSize = 224;
   static const int _embeddingDim = 512;
+
+  bool _initialized = false;
+
+  bool get isReady => _initialized && (_classifier != null || _embedder != null);
 
   TfliteInferenceService({required ModelDownloadManager downloadManager})
       : _downloadManager = downloadManager;
-
-  bool get isReady => _isInitialized;
 
   // ==========================================
   // Lifecycle
   // ==========================================
 
-  /// Initialize interpreters from downloaded models.
+  /// Initialize interpreters from downloaded model files.
   Future<bool> initialize() async {
-    if (_isInitialized) return true;
+    if (_initialized) return true;
 
     try {
-      // Load cover recognizer model
-      final recognizerPath = await _downloadManager.getModelPath(
+      // Load classifier model
+      final classifierPath = _downloadManager.getModelPath(
         ModelInfo.coverRecognizer().id,
       );
-      if (recognizerPath != null) {
-        _recognizerInterpreter = Interpreter.fromFile(File(recognizerPath));
-        _logger.i('Cover recognizer model loaded');
+      if (classifierPath != null && File(classifierPath).existsSync()) {
+        _classifier = Interpreter.fromFile(
+          File(classifierPath),
+          options: InterpreterOptions()..threads = 4,
+        );
+        _logger.i('Classifier model loaded');
       }
 
       // Load embedding model
-      final embeddingPath = await _downloadManager.getModelPath(
+      final embedderPath = _downloadManager.getModelPath(
         ModelInfo.coverEmbedding().id,
       );
-      if (embeddingPath != null) {
-        _embeddingInterpreter = Interpreter.fromFile(File(embeddingPath));
-        _logger.i('Cover embedding model loaded');
+      if (embedderPath != null && File(embedderPath).existsSync()) {
+        _embedder = Interpreter.fromFile(
+          File(embedderPath),
+          options: InterpreterOptions()..threads = 4,
+        );
+        _logger.i('Embedding model loaded');
       }
 
-      _isInitialized = _recognizerInterpreter != null;
-      return _isInitialized;
+      _initialized = _classifier != null || _embedder != null;
+      return _initialized;
     } catch (e) {
       _logger.e('Failed to initialize TFLite: $e');
-      _isInitialized = false;
       return false;
     }
   }
 
-  /// Dispose interpreters.
-  void dispose() {
-    _recognizerInterpreter?.close();
-    _embeddingInterpreter?.close();
-    _recognizerInterpreter = null;
-    _embeddingInterpreter = null;
-    _isInitialized = false;
-  }
-
   // ==========================================
-  // Recognition
+  // Classification
   // ==========================================
 
-  /// Recognize an album cover from an image file.
-  Future<CoverRecognitionResult?> recognizeCover(String imagePath) async {
-    if (!_isInitialized || _recognizerInterpreter == null) {
-      _logger.w('Recognizer not initialized');
-      return null;
-    }
+  /// Classify an album cover image.
+  /// Returns the top prediction with confidence.
+  Future<ClassificationResult?> recognizeCover(String imagePath) async {
+    if (_classifier == null) return null;
 
     try {
-      // Load and preprocess image
-      final imageData = await _loadAndPreprocess(imagePath);
-      if (imageData == null) return null;
+      final imageBytes = File(imagePath).readAsBytesSync();
+      final image = img.decodeImage(imageBytes);
+      if (image == null) return null;
 
-      // Run inference
-      final output = List.filled(1, List.filled(1000, 0.0)) as List<List<double>>;
-      _recognizerInterpreter!.run(imageData, output);
+      // Resize to model input size
+      final resized = img.copyResize(
+        image,
+        width: _classifierInputSize,
+        height: _classifierInputSize,
+      );
 
-      // Parse results
-      final results = _parseTopK(output[0], k: 5);
-      if (results.isEmpty) return null;
+      // Prepare input tensor
+      final input = Float32List(_classifierInputSize * _classifierInputSize * 3);
+      int idx = 0;
+      for (int y = 0; y < _classifierInputSize; y++) {
+        for (int x = 0; x < _classifierInputSize; x++) {
+          final pixel = resized.getPixel(x, y);
+          input[idx++] = pixel.r / 255.0;
+          input[idx++] = pixel.g / 255.0;
+          input[idx++] = pixel.b / 255.0;
+        }
+      }
 
-      return CoverRecognitionResult(
-        label: results.first.label,
-        confidence: results.first.confidence,
-        candidates: results,
+      final inputTensor = input.reshape([1, _classifierInputSize, _classifierInputSize, 3]);
+      final output = List.filled(1, List.filled(1000, 0.0))
+          .reshape([1, 1000]) as List<List<double>>;
+
+      _classifier!.run(inputTensor, output);
+
+      // Find top prediction
+      final predictions = output[0];
+      int maxIdx = 0;
+      double maxVal = 0.0;
+      for (int i = 0; i < predictions.length; i++) {
+        if (predictions[i] > maxVal) {
+          maxVal = predictions[i];
+          maxIdx = i;
+        }
+      }
+
+      // Map index to label (in production, load label map from assets)
+      return ClassificationResult(
+        label: 'label_$maxIdx',
+        confidence: maxVal,
       );
     } catch (e) {
-      _logger.e('Recognition failed: $e');
+      _logger.e('Classification failed: $e');
       return null;
     }
   }
 
-  /// Generate embedding vector from cover image.
+  // ==========================================
+  // Embeddings
+  // ==========================================
+
+  /// Generate a feature embedding for an image.
+  /// Returns a 512-dimensional vector for similarity matching.
   Future<List<double>?> generateEmbedding(String imagePath) async {
-    if (_embeddingInterpreter == null) {
-      _logger.w('Embedding model not loaded');
-      return null;
-    }
+    if (_embedder == null) return null;
 
     try {
-      final imageData = await _loadAndPreprocess(imagePath);
-      if (imageData == null) return null;
+      final imageBytes = File(imagePath).readAsBytesSync();
+      final image = img.decodeImage(imageBytes);
+      if (image == null) return null;
 
+      final resized = img.copyResize(
+        image,
+        width: _classifierInputSize,
+        height: _classifierInputSize,
+      );
+
+      final input = Float32List(_classifierInputSize * _classifierInputSize * 3);
+      int idx = 0;
+      for (int y = 0; y < _classifierInputSize; y++) {
+        for (int x = 0; x < _classifierInputSize; x++) {
+          final pixel = resized.getPixel(x, y);
+          input[idx++] = pixel.r / 255.0;
+          input[idx++] = pixel.g / 255.0;
+          input[idx++] = pixel.b / 255.0;
+        }
+      }
+
+      final inputTensor = input.reshape([1, _classifierInputSize, _classifierInputSize, 3]);
       final output = List.filled(1, List.filled(_embeddingDim, 0.0))
-          as List<List<double>>;
-      _embeddingInterpreter!.run(imageData, output);
+          .reshape([1, _embeddingDim]) as List<List<double>>;
 
-      return output[0];
+      _embedder!.run(inputTensor, output);
+
+      // Normalize the embedding
+      final embedding = output[0];
+      final norm = embedding.fold<double>(0.0, (sum, v) => sum + v * v);
+      if (norm > 0) {
+        final sqrtNorm = sqrt(norm);
+        for (int i = 0; i < embedding.length; i++) {
+          embedding[i] /= sqrtNorm;
+        }
+      }
+
+      return embedding;
     } catch (e) {
       _logger.e('Embedding generation failed: $e');
       return null;
@@ -153,60 +197,12 @@ class TfliteInferenceService {
   }
 
   // ==========================================
-  // Preprocessing
+  // Cleanup
   // ==========================================
 
-  /// Load image file and preprocess to model input format.
-  Future<List<List<List<List<double>>>>?> _loadAndPreprocess(
-    String imagePath,
-  ) async {
-    try {
-      final file = File(imagePath);
-      if (!await file.exists()) return null;
-
-      final bytes = await file.readAsBytes();
-      final image = img.decodeImage(bytes);
-      if (image == null) return null;
-
-      // Resize to model input size
-      final resized = img.copyResize(image, width: _inputSize, height: _inputSize);
-
-      // Normalize to [0, 1] and format as [1][224][224][3]
-      final input = List.generate(
-        1,
-        (_) => List.generate(
-          _inputSize,
-          (y) => List.generate(
-            _inputSize,
-            (x) {
-              final pixel = resized.getPixel(x, y);
-              return [
-                (pixel.r) / 255.0,
-                (pixel.g) / 255.0,
-                (pixel.b) / 255.0,
-              ];
-            },
-          ),
-        ),
-      );
-
-      return input;
-    } catch (e) {
-      _logger.e('Image preprocessing failed: $e');
-      return null;
-    }
-  }
-
-  /// Parse top-K results from model output.
-  List<RecognitionCandidate> _parseTopK(List<double> output, {int k = 5}) {
-    final indexed = output.asMap().entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    return indexed.take(k).map((entry) {
-      return RecognitionCandidate(
-        label: 'class_${entry.key}', // Will map to real album names via labels file
-        confidence: entry.value,
-      );
-    }).toList();
+  void dispose() {
+    _classifier?.close();
+    _embedder?.close();
+    _initialized = false;
   }
 }

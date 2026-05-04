@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:dio/dio.dart';
 import 'core/theme/app_theme.dart';
 import 'core/network/api_client.dart';
 import 'core/network/connectivity_service.dart';
 import 'core/services/haptic_service.dart';
 import 'data/services/storage/local_storage_service.dart';
 import 'data/services/recognition_service.dart';
+import 'data/services/api/musicbrainz_service.dart';
+import 'data/services/api/discogs_service.dart';
+import 'data/services/ml/text_extraction_service.dart';
+import 'data/services/ml/image_labeling_service.dart';
+import 'data/services/ml/barcode_scanning_service.dart';
 import 'data/repositories/album_repository.dart';
 import 'features/camera/bloc/camera_bloc.dart';
 import 'features/collection/bloc/collection_bloc.dart';
@@ -24,11 +30,24 @@ void main() async {
   // Initialize haptic feedback
   await HapticService.init();
 
-  // Initialize services
+  // Initialize API client
   final apiClient = ApiClient();
+
+  // Initialize sub-services
   final connectivity = ConnectivityService();
+  final musicBrainz = MusicBrainzService(apiClient);
+  final discogs = DiscogsService(apiClient);
+  final textExtractor = TextExtractionService();
+  final imageLabeler = ImageLabelingService();
+  final barcodeScanner = BarcodeScanningService();
+
+  // Initialize recognition service with all dependencies
   final recognition = RecognitionService(
-    apiClient: apiClient,
+    musicBrainz: musicBrainz,
+    discogs: discogs,
+    textExtractor: textExtractor,
+    imageLabeler: imageLabeler,
+    barcodeScanner: barcodeScanner,
     connectivity: connectivity,
   );
   final repository = AlbumRepository(storage);
@@ -119,8 +138,8 @@ class _AppEntryState extends State<_AppEntry> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: AppColors_AppEntry.background,
-        body: Center(child: CircularProgressIndicator(color: AppColors_AppEntry.primary)),
+        backgroundColor: Color(0xFF0A0E1A),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFF7C3AED))),
       );
     }
 
@@ -134,10 +153,4 @@ class _AppEntryState extends State<_AppEntry> {
 
     return const HomeScreen();
   }
-}
-
-// Workaround: access theme colors from static context
-class AppColors_AppEntry {
-  static const background = Color(0xFF0A0E1A);
-  static const primary = Color(0xFF7C3AED);
 }
