@@ -2,11 +2,11 @@ import 'dart:io';
 import 'package:uuid/uuid.dart';
 import '../models/album_model.dart';
 import '../models/recognition_result.dart';
-import '../api/musicbrainz_service.dart';
-import '../api/discogs_service.dart';
-import '../ml/barcode_scanning_service.dart';
-import '../offline/offline_recognition_service.dart';
-import '../ml/tflite_inference_service.dart';
+import 'api/musicbrainz_service.dart';
+import 'api/discogs_service.dart';
+import 'ml/barcode_scanning_service.dart';
+import 'offline/offline_recognition_service.dart';
+import 'ml/tflite_inference_service.dart';
 import '../../../core/network/api_client.dart';
 
 /// Main recognition pipeline service.
