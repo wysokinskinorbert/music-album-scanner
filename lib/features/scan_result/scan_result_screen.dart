@@ -4,8 +4,6 @@ import '../../../data/models/album_model.dart';
 import '../../../data/services/recognition_service.dart';
 import '../../../data/repositories/album_repository.dart';
 import 'bloc/scan_result_bloc.dart';
-import 'bloc/scan_result_event.dart';
-import 'bloc/scan_result_state.dart';
 
 class ScanResultScreen extends StatelessWidget {
   final String imagePath;
@@ -114,12 +112,12 @@ class _AlbumDetail extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (album.coverUrl != null)
+          if (album.coverArtUrl != null)
             Center(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.network(
-                  album.coverUrl!,
+                  album.coverArtUrl!,
                   height: 250,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Container(

@@ -65,19 +65,18 @@ class ScanResultBloc extends Bloc<ScanResultEvent, ScanResultState> {
   ) async {
     emit(const ScanResultProcessing(currentStep: 'Searching...'));
 
-    final result = await _recognition.searchByQuery(
-      '${event.artist} ${event.album}'.trim(),
-    );
+    final query = '${event.artist} ${event.album}'.trim();
+    final albums = await _recognition.searchByQuery(query);
 
-    if (result.isSuccess && result.album != null) {
+    if (albums.isNotEmpty) {
       emit(ScanResultSuccess(
-        album: result.album!,
-        source: result.sourceLabel,
-        confidence: result.confidence,
+        album: albums.first,
+        source: 'online',
+        confidence: 0.0,
       ));
     } else {
       emit(ScanResultFailure(
-        message: result.errorMessage ?? result.message ?? 'No results found for "${event.artist} - ${event.album}"',
+        message: 'No results found for "$query"',
       ));
     }
   }

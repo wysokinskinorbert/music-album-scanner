@@ -303,7 +303,7 @@ class _ManualSearchScreenState extends State<ManualSearchScreen> {
             height: 48,
             child: ElevatedButton.icon(
               onPressed: () {
-                context.read<ScanResultBloc>().add(ConfirmAndSave(album));
+                context.read<ScanResultBloc>().add(ConfirmAndSave(album: album));
               },
               icon: const Icon(Icons.add, size: 18),
               label: const Text(
