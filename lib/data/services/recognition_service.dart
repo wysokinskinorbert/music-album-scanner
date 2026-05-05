@@ -66,6 +66,11 @@ class RecognitionService {
   String? _parseSmolVLMResponse(String response) {
     var cleaned = response.trim();
     
+    // Remove surrounding quotes
+    if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+      cleaned = cleaned.substring(1, cleaned.length - 1).trim();
+    }
+    
     // Remove common prefixes
     for (final prefix in ['Answer:', 'answer:', 'Response:', 'response:']) {
       if (cleaned.startsWith(prefix)) {

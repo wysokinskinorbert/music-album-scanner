@@ -7,6 +7,7 @@ import '../../data/services/ml/model/model_download_manager.dart';
 import '../../data/services/recognition_service.dart';
 import '../../data/services/api/cloud_vision_service.dart';
 import '../../services/smolvlm_service.dart';
+import '../batch/ensemble_batch_test_screen.dart';
 import '../import_export/import_screen.dart';
 import '../sharing/share_export_screen.dart';
 import 'model_download_screen.dart';
@@ -145,6 +146,12 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: 'Recognize album from cover image',
                   onTap: () => _testSmolVLM(context),
                 ),
+                _buildTile(
+                  icon: Icons.batch_prediction,
+                  title: 'Ensemble Batch Test',
+                  subtitle: 'Test full pipeline: OCR + SmolVLM + ImageLabeler + APIs',
+                  onTap: () => _runEnsembleBatchTest(context),
+                ),
               ]),
               const SizedBox(height: 24),
 
@@ -193,7 +200,7 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: 'Import from Discogs CSV, MusicBrainz, or JSON',
                   onTap: () {
                     Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ImportScreen()),
+                      MaterialPageRoute(builder: (_) => ImportScreen()),
                     );
                   },
                 ),
@@ -437,6 +444,12 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _runEnsembleBatchTest(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const EnsembleBatchTestScreen()),
     );
   }
 

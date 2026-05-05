@@ -26,10 +26,13 @@ class SmolVLMService {
 
     _isInitializing = true;
     try {
-      // Sprawdź czy model istnieje w filesDir
+      // Sprawdź czy model istnieje w filesDir (internal storage)
       final appDir = await getApplicationDocumentsDirectory();
-      final modelFile = File('${appDir.path}/models/SmolVLM-256M-Instruct-Q8_0.gguf');
-      final mmprojFile = File('${appDir.path}/models/mmproj-SmolVLM-256M-Instruct-Q8_0.gguf');
+      // getApplicationDocumentsDirectory() zwraca app_flutter/, ale model jest w files/
+      // Więc używamy ścieżki bezpośredniej do filesDir
+      final filesDir = Directory('${appDir.parent.path}/files');
+      final modelFile = File('${filesDir.path}/models/SmolVLM-256M-Instruct-Q8_0.gguf');
+      final mmprojFile = File('${filesDir.path}/models/mmproj-SmolVLM-256M-Instruct-Q8_0.gguf');
 
       if (!modelFile.existsSync() || !mmprojFile.existsSync()) {
         print('SmolVLM: Model files not found');
