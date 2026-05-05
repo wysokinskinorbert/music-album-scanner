@@ -11,6 +11,7 @@ import 'data/services/ml/text_extraction_service.dart';
 import 'data/services/ml/image_labeling_service.dart';
 import 'data/services/api/cloud_vision_service.dart';
 import 'core/network/api_client.dart';
+import 'services/smolvlm_service.dart';
 import 'features/home/home_screen.dart';
 
 void main() async {
@@ -36,6 +37,7 @@ void main() async {
     textExtraction: textExtraction,
     imageLabeler: imageLabeler,
     cloudVision: cloudVision,
+    smolVLM: SmolVLMService(),
   );
   final repository = AlbumRepository(storage);
 

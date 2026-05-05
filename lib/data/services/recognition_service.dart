@@ -12,6 +12,7 @@ import 'ml/image_labeling_service.dart';
 import 'offline/offline_recognition_service.dart';
 import 'ml/tflite_inference_service.dart';
 import '../../core/network/api_client.dart';
+import '../../services/smolvlm_service.dart';
 
 /// Main recognition pipeline service with multi-query scoring.
 class RecognitionService {
@@ -24,6 +25,7 @@ class RecognitionService {
   final OfflineRecognitionService? _offlineService;
   final TextExtractionService? _textExtraction;
   final ImageLabelingService? _imageLabeler;
+  final SmolVLMService? _smolVLM;
 
   /// Whether OCR found meaningful text (set during recognition).
   bool _ocrHasText = false;
@@ -38,6 +40,7 @@ class RecognitionService {
     OfflineRecognitionService? offlineService,
     TextExtractionService? textExtraction,
     ImageLabelingService? imageLabeler,
+    SmolVLMService? smolVLM,
   })  : _apiClient = apiClient,
         _musicBrainz = musicBrainz ?? MusicBrainzService(ApiClient()),
         _discogs = discogs ?? DiscogsService(),
@@ -46,7 +49,8 @@ class RecognitionService {
         _tfliteService = tfliteService,
         _offlineService = offlineService,
         _textExtraction = textExtraction,
-        _imageLabeler = imageLabeler;
+        _imageLabeler = imageLabeler,
+        _smolVLM = smolVLM;
 
   /// Cloud Vision service access for settings UI.
   CloudVisionService get cloudVision => _cloudVision;
@@ -55,6 +59,46 @@ class RecognitionService {
   int? _parseYear(String? dateStr) {
     if (dateStr == null || dateStr.length < 4) return null;
     return int.tryParse(dateStr.substring(0, 4));
+  }
+
+  /// Parse SmolVLM response into a clean search query.
+  /// Handles formats like "Artist: X, Album: Y", "X - Y", "Answer: X - Y"
+  String? _parseSmolVLMResponse(String response) {
+    var cleaned = response.trim();
+    
+    // Remove common prefixes
+    for (final prefix in ['Answer:', 'answer:', 'Response:', 'response:']) {
+      if (cleaned.startsWith(prefix)) {
+        cleaned = cleaned.substring(prefix.length).trim();
+      }
+    }
+    
+    // Remove <end_of_utterance> and similar markers
+    cleaned = cleaned.replaceAll(RegExp(r'<[^>]+>'), '').trim();
+    
+    // Try "Artist: X, Album: Y" or "Artist: X\nAlbum: Y" format
+    final artistAlbum = RegExp(r'Artist:\s*(.+?)(?:,\s*Album:|\n\s*Album:)\s*(.+)', caseSensitive: false);
+    final match = artistAlbum.firstMatch(cleaned);
+    if (match != null) {
+      return '${match.group(1)!.trim()} ${match.group(2)!.trim()}';
+    }
+    
+    // Try "Artist - Album" or "Artist - Album" format  
+    final dashMatch = RegExp(r'^(.+?)\s*[-–—]\s*(.+)$').firstMatch(cleaned);
+    if (dashMatch != null) {
+      final artist = dashMatch.group(1)!.trim();
+      final album = dashMatch.group(2)!.trim();
+      if (artist.isNotEmpty && album.isNotEmpty) {
+        return '$artist $album';
+      }
+    }
+    
+    // If we got something meaningful (>= 3 chars), use it as-is
+    if (cleaned.length >= 3 && cleaned.length <= 200) {
+      return cleaned;
+    }
+    
+    return null;
   }
 
   /// Calculate fuzzy match score between OCR text and a MusicBrainz result.
@@ -179,6 +223,36 @@ class RecognitionService {
         } catch (e) {
           debugPrint('[Recognition] OCR ERROR: $e');
         }
+      }
+
+      // Step 2b: SmolVLM vision model (local VLM inference)
+      // SmolVLM generates a description of the album cover which we use as search query
+      debugPrint('[Recognition] Step 2b: SmolVLM vision model...');
+      String? smolvlmQuery;
+      if (_smolVLM != null) {
+        try {
+          if (!_smolVLM!.isModelLoaded) {
+            debugPrint('[Recognition] SmolVLM: loading model...');
+            final loaded = await _smolVLM!.initializeModel();
+            debugPrint('[Recognition] SmolVLM: model loaded = $loaded');
+          }
+          if (_smolVLM!.isModelLoaded) {
+            final vlmResult = await _smolVLM!.recognizeAlbum(imagePath);
+            debugPrint('[Recognition] SmolVLM raw result: "$vlmResult"');
+            if (!vlmResult.startsWith('Error:') && vlmResult.trim().isNotEmpty) {
+              // Parse VLM response - extract artist and album
+              smolvlmQuery = _parseSmolVLMResponse(vlmResult);
+              debugPrint('[Recognition] SmolVLM parsed query: "$smolvlmQuery"');
+              if (smolvlmQuery != null) {
+                ocrQueries.insert(0, smolvlmQuery);
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('[Recognition] SmolVLM ERROR: $e');
+        }
+      } else {
+        debugPrint('[Recognition] SmolVLM: not available');
       }
 
       // Step 3: MusicBrainz search with ALL queries + scoring

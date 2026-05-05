@@ -194,6 +194,8 @@ Java_com_albumscanner_music_1album_1scanner_SmolVLMBridge_processImage(
     // 4. Reset state for new inference
     g_n_past = 0;
     common_sampler_reset(g_smpl);
+    // Clear KV cache from previous inference
+    llama_memory_clear(llama_get_memory(g_ctx), true);
 
     // 5. Evaluate chunks (text + image embeddings)
     llama_pos new_n_past = 0;

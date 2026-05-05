@@ -36,6 +36,11 @@
             android:exported="true"
             android:label="SmolVLM Test">
         </activity>
+        <activity
+            android:name=".SmolVLMBatchTestActivity"
+            android:exported="true"
+            android:label="SmolVLM Batch Test">
+        </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
