@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../core/theme/app_colors.dart';
 import 'bloc/camera_bloc.dart';
 import '../scan_result/scan_result_screen.dart';
@@ -19,7 +20,17 @@ class _ScanScreenState extends State<ScanScreen> {
   @override
   void initState() {
     super.initState();
+    _requestPermissions();
     context.read<CameraBloc>().add(InitializeCamera());
+  }
+
+  Future<void> _requestPermissions() async {
+    // On Android 13+ we need READ_MEDIA_IMAGES for gallery and camera
+    await [
+      Permission.camera,
+      Permission.photos,
+      Permission.storage,
+    ].request();
   }
 
   @override

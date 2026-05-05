@@ -94,7 +94,7 @@ class TextExtractionService {
 
     // Strategy 2: First two lines combined (artist + title)
     if (extracted.lines.length >= 2) {
-      queries.add('\${extracted.lines[0]} \${extracted.lines[1]}');
+      queries.add('${extracted.lines[0]} ${extracted.lines[1]}');
     }
 
     // Strategy 3: All text joined (for covers with lots of text)

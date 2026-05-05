@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/haptic_service.dart';
 import '../../data/repositories/album_repository.dart';
-import '../../data/services/recognition_service.dart';
 import '../collection/bloc/collection_bloc.dart';
 import '../camera/bloc/camera_bloc.dart';
 import '../collection/collection_screen.dart';
@@ -20,32 +19,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 1; // Start on Scan tab
-
-  @override
-  void initState() {
-    super.initState();
-    // Auto-test: after 3 seconds, run recognition on a test image
-    _runAutoTest();
-  }
-
-  Future<void> _runAutoTest() async {
-    await Future.delayed(const Duration(seconds: 3));
-    if (!mounted) return;
-    
-    const testPath = '/sdcard/Download/AlbumCovers/17_Radiohead_OK_Computer.jpg';
-    debugPrint('[AutoTest] Starting auto-recognition test with $testPath');
-    
-    try {
-      final recognition = context.read<RecognitionService>();
-      final result = await recognition.recognizeFromImage(testPath);
-      debugPrint('[AutoTest] RESULT: state=${result.state}, message=${result.message}');
-      if (result.album != null) {
-        debugPrint('[AutoTest] Album: ${result.album!.artist} - ${result.album!.title}');
-      }
-    } catch (e) {
-      debugPrint('[AutoTest] ERROR: $e');
-    }
-  }
 
   final List<Widget> _screens = const [
     CollectionScreen(),
