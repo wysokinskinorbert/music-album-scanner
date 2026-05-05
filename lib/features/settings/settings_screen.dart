@@ -6,6 +6,7 @@ import '../../data/repositories/album_repository.dart';
 import '../../data/services/ml/model/model_download_manager.dart';
 import '../../data/services/recognition_service.dart';
 import '../../data/services/api/cloud_vision_service.dart';
+import '../../services/smolvlm_service.dart';
 import '../import_export/import_screen.dart';
 import '../sharing/share_export_screen.dart';
 import 'model_download_screen.dart';
@@ -126,6 +127,23 @@ class SettingsScreen extends StatelessWidget {
                   title: 'Embedding Index',
                   subtitle: '0 covers indexed for offline matching',
                   trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+                ),
+              ]),
+              const SizedBox(height: 24),
+
+              // --- SmolVLM Section ---
+              _buildSection('SmolVLM (Local Vision Model)', [
+                _buildTile(
+                  icon: Icons.model_training,
+                  title: 'Download SmolVLM Model',
+                  subtitle: '279MB - Local cover recognition without internet',
+                  onTap: () => _downloadSmolVLMModel(context),
+                ),
+                _buildTile(
+                  icon: Icons.image_search,
+                  title: 'Test SmolVLM',
+                  subtitle: 'Recognize album from cover image',
+                  onTap: () => _testSmolVLM(context),
                 ),
               ]),
               const SizedBox(height: 24),
@@ -420,6 +438,84 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _downloadSmolVLMModel(BuildContext context) async {
+    final service = SmolVLMService();
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Downloading SmolVLM'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Downloading model files...\nThis may take a few minutes', 
+              style: TextStyle(color: AppColors.textTertiary)),
+          ],
+        ),
+      ),
+    );
+
+    final success = await service.downloadModel();
+    
+    if (context.mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? 'SmolVLM downloaded!' : 'Download failed'),
+          backgroundColor: success ? AppColors.success : AppColors.error,
+        ),
+      );
+    }
+  }
+
+  void _testSmolVLM(BuildContext context) async {
+    final service = SmolVLMService();
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Testing SmolVLM'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Processing cover image...', 
+              style: TextStyle(color: AppColors.textTertiary)),
+          ],
+        ),
+      ),
+    );
+
+    // Test with a sample image path
+    const testImagePath = '/sdcard/Download/AlbumCovers/01_Aphex_Twin_Selected_Ambient_Works_85-92.jpg';
+    final result = await service.recognizeAlbum(testImagePath);
+    
+    if (context.mounted) {
+      Navigator.pop(context);
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text('SmolVLM Result'),
+          content: Text(result, style: const TextStyle(color: AppColors.textPrimary)),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 }
 

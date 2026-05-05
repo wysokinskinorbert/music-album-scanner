@@ -25,7 +25,7 @@ android {
         applicationId = "com.albumscanner.music_album_scanner"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -36,6 +36,9 @@ android {
                 arguments += "-DANDROID_STL=c++_shared"
                 cppFlags += listOf("-O3", "-std=c++17")
             }
+        }
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
         }
     }
     
