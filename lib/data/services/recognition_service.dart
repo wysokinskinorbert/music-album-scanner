@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/album_model.dart';
 import '../models/recognition_result.dart';
@@ -42,12 +43,31 @@ class RecognitionService {
 
   /// Main recognition pipeline
   Future<RecognitionResult> recognizeFromImage(String imagePath) async {
+    debugPrint('══════════════════════════════════════════');
+    debugPrint('[Recognition] START recognizeFromImage path="$imagePath"');
+    debugPrint('══════════════════════════════════════════');
+
     try {
+      // Verify file exists
+      final file = File(imagePath);
+      if (!await file.exists()) {
+        debugPrint('[Recognition] ERROR: file does not exist!');
+        return RecognitionResult(
+          state: RecognitionState.error,
+          message: 'Image file not found: $imagePath',
+        );
+      }
+      final fileSize = await file.length();
+      debugPrint('[Recognition] File size: ${fileSize ~/ 1024}KB');
+
       // Step 1: Try barcode scanning
+      debugPrint('[Recognition] Step 1: Barcode scanning...');
       final barcodeResult = await _barcodeService.scanImage(imagePath);
+      debugPrint('[Recognition] Barcode result: ${barcodeResult.barcode ?? "none"}');
       if (barcodeResult.barcode != null && barcodeResult.barcode!.isNotEmpty) {
         final album = await _searchByBarcode(barcodeResult.barcode!);
         if (album != null) {
+          debugPrint('[Recognition] FOUND via barcode: ${album.artist} - ${album.title}');
           return RecognitionResult(
             state: RecognitionState.success,
             album: album,
@@ -58,48 +78,73 @@ class RecognitionService {
         }
       }
 
-      // Step 2: OCR text extraction -- primary path for covers with text
+      // Step 2: OCR text extraction
+      debugPrint('[Recognition] Step 2: OCR text extraction...');
       String? searchQuery;
       if (_textExtraction != null) {
         try {
           final extracted = await _textExtraction!.extractText(imagePath);
+          debugPrint('[Recognition] OCR rawText: "${extracted.rawText}"');
+          debugPrint('[Recognition] OCR lines: ${extracted.lines}');
+          debugPrint('[Recognition] OCR hasText: ${extracted.hasText}, blocks: ${extracted.blockCount}');
           if (extracted.hasText) {
             final queries = _textExtraction!.generateSearchQueries(extracted);
+            debugPrint('[Recognition] OCR generated queries: $queries');
             if (queries.isNotEmpty) {
               searchQuery = queries.first;
             }
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[Recognition] OCR ERROR: $e');
+        }
+      } else {
+        debugPrint('[Recognition] TextExtraction is NULL');
       }
 
-      // Step 3: Image labeling -- fallback when OCR finds no text
+      // Step 3: Image labeling
+      debugPrint('[Recognition] Step 3: Image labeling...');
       if (searchQuery == null && _imageLabeler != null) {
         try {
           final analysis = await _imageLabeler!.analyzeCover(imagePath);
+          debugPrint('[Recognition] Labels: ${analysis.labelTexts}');
+          debugPrint('[Recognition] CoverType: ${analysis.coverType}, genres: ${analysis.detectedGenres}');
           if (analysis.labels.isNotEmpty) {
-            // Use highest-confidence label as search query
             final bestLabel = analysis.labels.reduce(
               (a, b) => a.confidence > b.confidence ? a : b,
             );
             searchQuery = bestLabel.label;
+            debugPrint('[Recognition] Best label: "${bestLabel.label}" (${(bestLabel.confidence * 100).toStringAsFixed(0)}%)');
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[Recognition] ImageLabeler ERROR: $e');
+        }
+      } else if (_imageLabeler == null) {
+        debugPrint('[Recognition] ImageLabeler is NULL');
       }
 
-      // Step 4: TFLite classification -- additional fallback
-      if (searchQuery == null &&
-          _tfliteService != null &&
-          _tfliteService!.isModelLoaded) {
-        try {
-          final labels = await _tfliteService!.classify(imagePath);
-          if (labels.isNotEmpty) searchQuery = labels.first.key;
-        } catch (_) {}
+      // Step 4: TFLite
+      debugPrint('[Recognition] Step 4: TFLite classification...');
+      if (searchQuery == null && _tfliteService != null) {
+        debugPrint('[Recognition] TFLite model loaded: ${_tfliteService!.isModelLoaded}');
+        if (_tfliteService!.isModelLoaded) {
+          try {
+            final labels = await _tfliteService!.classify(imagePath);
+            debugPrint('[Recognition] TFLite labels: $labels');
+            if (labels.isNotEmpty) searchQuery = labels.first.key;
+          } catch (e) {
+            debugPrint('[Recognition] TFLite ERROR: $e');
+          }
+        }
+      } else if (_tfliteService == null) {
+        debugPrint('[Recognition] TFLite is NULL');
       }
 
-      // Step 5: Offline recognition
+      // Step 5: Offline
+      debugPrint('[Recognition] Step 5: Offline recognition...');
       if (_offlineService != null) {
         try {
           final offlineResult = await _offlineService!.recognize(imagePath);
+          debugPrint('[Recognition] Offline: recognized=${offlineResult.recognized}, conf=${offlineResult.confidence}');
           if (offlineResult.recognized && offlineResult.confidence >= 0.6) {
             final album = Album(
               id: const Uuid().v4(),
@@ -116,30 +161,39 @@ class RecognitionService {
               source: 'offline',
             );
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[Recognition] Offline ERROR: $e');
+        }
+      } else {
+        debugPrint('[Recognition] OfflineService is NULL');
       }
 
-      // Step 6: MusicBrainz search with best available query
+      // Step 6: MusicBrainz search
+      debugPrint('[Recognition] Step 6: MusicBrainz search, searchQuery="$searchQuery"');
       if (searchQuery != null) {
-        // Try each OCR query strategy before falling back
         List<String> allQueries = [];
         if (_textExtraction != null) {
           try {
             final extracted = await _textExtraction!.extractText(imagePath);
             if (extracted.hasText) {
               allQueries = _textExtraction!.generateSearchQueries(extracted);
+              debugPrint('[Recognition] All OCR queries for MB: $allQueries');
             }
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('[Recognition] OCR re-extract ERROR: $e');
+          }
         }
         if (allQueries.isEmpty) {
           allQueries = [searchQuery];
         }
 
         for (final query in allQueries) {
+          debugPrint('[Recognition] Trying MusicBrainz query: "$query"');
           try {
             final mbRaw = await _musicBrainz.searchRelease(query: query);
             if (mbRaw.isNotEmpty) {
               final first = mbRaw.first;
+              debugPrint('[Recognition] MB hit: ${first['title']} by ${first['artist-credit']?[0]?['name']}');
               final album = Album(
                 id: const Uuid().v4(),
                 title: first['title']?.toString() ?? 'Unknown',
@@ -159,14 +213,20 @@ class RecognitionService {
                 source: 'online',
               );
             }
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('[Recognition] MusicBrainz query "$query" ERROR: $e');
+          }
         }
+      } else {
+        debugPrint('[Recognition] No searchQuery -- skipping MusicBrainz');
       }
 
       // Step 7: Discogs fallback
+      debugPrint('[Recognition] Step 7: Discogs fallback, searchQuery="$searchQuery"');
       if (searchQuery != null) {
         try {
           final discogsResults = await _discogs.searchRelease(searchQuery);
+          debugPrint('[Recognition] Discogs results: ${discogsResults.length}');
           if (discogsResults.isNotEmpty) {
             return RecognitionResult(
               state: RecognitionState.success,
@@ -175,14 +235,19 @@ class RecognitionService {
               source: 'online',
             );
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[Recognition] Discogs ERROR: $e');
+        }
       }
 
+      debugPrint('[Recognition] ALL STEPS FAILED - returning failure');
       return RecognitionResult(
         state: RecognitionState.failed,
         message: 'Could not recognize album. Try taking a clearer photo.',
       );
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[Recognition] PIPELINE CRASH: $e');
+      debugPrint('[Recognition] Stack: $stack');
       return RecognitionResult(
         state: RecognitionState.error,
         message: 'Recognition error: $e',
