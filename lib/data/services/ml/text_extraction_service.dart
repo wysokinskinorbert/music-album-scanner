@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'image_preprocessor.dart';
 
 /// Extracts text from album cover images using Google ML Kit OCR.
 /// Used to find artist names, album titles, and label info from covers.
@@ -14,17 +15,62 @@ class TextExtractionService {
   /// not actual artist or album name information.
   static const _metadataPatterns = [
     'DIGITALLY', 'REMASTERED', 'REMASTER', 'ORIGINAL', 'ANALOG', 'ANALOGUE',
-    'DIGITAL', 'AUDIO', 'COMPACT', 'TOP-HIT', 'CD', 'VINYL', 'STEREO',
+    'DIGITAL', 'AUDIO', 'COMPACT', 'TOP-HIT', 'STEREO',
     'RECORDING', 'MASTERED', 'RECORDED', 'PRESSING', 'EDITION',
-    'GOLD DISC', '24 KARAT', 'KARAT', 'GOLD', 'PLATINUM', 'REISSUE',
+    'GOLD DISC', '24 KARAT', 'KARAT', 'PLATINUM', 'REISSUE',
     'BOOKLET INCLUDES', 'COMPLETE ORIGINAL', 'ARTWORK', 'MASTER TAPES',
     'FROM THE ORIGINAL', 'COLLECTORS EDITION', 'LIMITED EDITION',
+    'PARENTAL ADVISORY', 'EXPLICIT CONTENT', 'EXPLICIT', 'ADVISORY',
+    'MADE IN', 'MANUFACTURED BY', 'DISTRIBUTED BY', 'LICENSED FROM',
+    'ALL RIGHTS RESERVED', 'COPYRIGHT', 'PHONOGRAPHIC',
+  ];
+
+  /// Words that are commonly stylized on album covers but are valid artist/title words.
+  /// These should NOT be filtered out even if they look like metadata.
+  static const _whitelistWords = [
+    'untitled', 'unknown', 'various', 'artists', 'soundtrack',
+    'homogenic', 'post', 'vespertine', 'medulla', 'biophilia',
+    'rumours', 'tusk', 'mirage', 'say you will',
+    'paranoid', 'sabbath', 'master', 'vol', 'volume',
+    'discovery', 'human', 'random', 'access', 'memories',
+    'zombie', 'afrobeat', 'afrika', 'gentleman', 'expensive',
+    'madvillain', 'madvillainy', 'doom', 'mf', 'quasimoto',
+    'tago', 'mago', 'ege', 'bamyasi', 'future', 'days',
+    'nonagon', 'infinity', 'polygondwanaland', 'flying',
+    'microtonal', 'banana', 'murder', 'universe',
+    'to pimp', 'butterfly', 'damn', 'good', 'kid', 'maad',
+    'selected', 'ambient', 'works', 'richard', 'james',
+    'music has', 'right', 'children', 'geogaddi', 'tomorrow',
+    'harvest', 'moon', 'heaven', 'or', 'las vegas',
+    'mezzanine', 'blue', 'lines', 'protection', 'heligoland',
+    'ok', 'computer', 'kid', 'a', 'amnesiac', 'in', 'rainbows',
+    'vespertine', 'medulla', 'biophilia', 'vulnicura', 'utopia',
+    'fela', 'kuti', 'zombie', 'gentleman', 'confusion',
+    'black', 'sabbath', 'dio', 'ozzy', 'tony', 'geezer',
+    'miles', 'davis', 'bitches', 'brew', 'kind', 'blue',
+    'nusrat', 'fateh', 'ali', 'khan', 'qawwali', 'shahenshah',
+    'sigur', 'ros', 'takk', 'agætis', 'byrjun', 'kveikur',
+    'talking', 'heads', 'remain', 'light', 'fear', 'music',
+    'speaking', 'tongues', 'little', 'creatures',
+    'burial', 'untrue', 'kindred', 'rival', 'dealers',
+    'king', 'gizzard', 'lizard', 'wizard', 'nonagon', 'infinity',
+    'metallica', 'master', 'puppets', 'justice', 'black', 'album',
+    'daft', 'punk', 'alive', 'homework', 'discovery',
+    'kendrick', 'lamar', 'section', 'good', 'kid', 'damn',
+    'bjork', 'sugarcubes', 'debut', 'post', 'homogenic',
+    'fleetwood', 'mac', 'rumours', 'tango', 'night',
   ];
 
   /// Returns true if a line of OCR text is likely cover metadata/noise
   /// (e.g. "DIGITALLY REMASTERED", catalog numbers like "INT 110.604").
   bool _isLikelyMetadata(String text) {
     final upper = text.toUpperCase();
+
+    // Check whitelist first - these are valid artist/title words
+    final lower = text.toLowerCase();
+    for (final word in _whitelistWords) {
+      if (lower.contains(word)) return false;
+    }
 
     // Lines that are ALL CAPS and match metadata patterns
     for (final pattern in _metadataPatterns) {
@@ -47,25 +93,43 @@ class TextExtractionService {
   /// Sort OCR lines by bounding-box area, largest first.
   /// Largest text on a cover is most likely the album title or artist name.
   /// Metadata lines are filtered out before sorting.
-  List<String> _sortLinesBySize(RecognizedText recognizedText) {
-    final linesWithSize = <MapEntry<String, double>>[];
+  List<_OcrLine> _sortLinesBySize(RecognizedText recognizedText) {
+    final linesWithSize = <_OcrLine>[];
     for (final block in recognizedText.blocks) {
       for (final line in block.lines) {
         final text = line.text.trim();
-        if (text.isEmpty || _isLikelyMetadata(text)) continue;
+        if (text.isEmpty) continue;
+        
+        // Use confidence threshold - but be lenient for stylized fonts
+        // Stylized fonts often have lower confidence (0.3-0.6)
+        // but still contain valid text
+        final confidence = line.confidence ?? 0.0;
+        if (confidence < 0.2) continue; // Too low = garbage
+        
+        final isMetadata = _isLikelyMetadata(text);
         final bb = line.boundingBox;
         final area = bb.width * bb.height;
-        linesWithSize.add(MapEntry(text, area));
+        
+        linesWithSize.add(_OcrLine(
+          text: text,
+          area: area,
+          confidence: confidence,
+          isMetadata: isMetadata,
+        ));
       }
     }
-    linesWithSize.sort((a, b) => b.value.compareTo(a.value));
-    return linesWithSize.map((e) => e.key).toList();
+    linesWithSize.sort((a, b) => b.area.compareTo(a.area));
+    return linesWithSize;
   }
 
   /// Extract all text blocks from an image file.
   Future<ExtractedText> extractText(String imagePath) async {
     debugPrint('[TextExtraction] extractText path="$imagePath"');
-    final inputImage = InputImage.fromFilePath(imagePath);
+    
+    // Preprocess image for better OCR
+    final preprocessedPath = await ImagePreprocessor.preprocessForOCR(imagePath);
+    
+    final inputImage = InputImage.fromFilePath(preprocessedPath);
     debugPrint('[TextExtraction] InputImage created, filePath=${inputImage.filePath}');
 
     try {
@@ -115,29 +179,36 @@ class TextExtractionService {
     for (final block in recognizedText.blocks) {
       for (final line in block.lines) {
         final text = line.text.trim();
-        if (text.isNotEmpty) {
+        if (text.isNotEmpty && (line.confidence ?? 0.0) >= 0.2) {
           lines.add(text);
         }
       }
     }
 
-    // Build filtered lines (metadata removed) sorted by bounding-box area
-    final filteredLines = _sortLinesBySize(recognizedText);
+    // Build filtered lines with confidence and metadata info
+    final sortedLines = _sortLinesBySize(recognizedText);
+    
+    // Filtered = non-metadata, sorted by size
+    final filteredLines = sortedLines
+        .where((l) => !l.isMetadata)
+        .map((l) => l.text)
+        .toList();
+    
+    // All meaningful lines (including metadata but with low confidence filtered)
+    final meaningfulLines = sortedLines.map((l) => l.text).toList();
 
     // Build bounding-box area map for each filtered line
     final boundingBoxAreas = <String, double>{};
-    for (final block in recognizedText.blocks) {
-      for (final line in block.lines) {
-        final text = line.text.trim();
-        if (text.isEmpty || _isLikelyMetadata(text)) continue;
-        final bb = line.boundingBox;
-        boundingBoxAreas[text] = bb.width * bb.height;
-      }
+    final lineConfidences = <String, double>{};
+    for (final line in sortedLines) {
+      if (line.isMetadata) continue;
+      boundingBoxAreas[line.text] = line.area;
+      lineConfidences[line.text] = line.confidence;
     }
 
     debugPrint('[TextExtraction] raw lines=${lines.length}, filtered lines=${filteredLines.length}');
     for (final fl in filteredLines) {
-      debugPrint('[TextExtraction]   filtered: "$fl" area=${boundingBoxAreas[fl]?.toStringAsFixed(0)}');
+      debugPrint('[TextExtraction]   filtered: "$fl" area=${boundingBoxAreas[fl]?.toStringAsFixed(0)} conf=${lineConfidences[fl]?.toStringAsFixed(2)}');
     }
 
     return ExtractedText(
@@ -148,7 +219,9 @@ class TextExtractionService {
       bottomText: bottomText,
       blockCount: blocks.length,
       filteredLines: filteredLines,
+      meaningfulLines: meaningfulLines,
       boundingBoxAreas: boundingBoxAreas,
+      lineConfidences: lineConfidences,
     );
   }
 
@@ -170,25 +243,47 @@ class TextExtractionService {
     // Strategy 2: Top 2 largest lines combined (artist + title)
     if (filtered.length >= 2) {
       queries.add('${filtered[0]} ${filtered[1]}');
+      queries.add('${filtered[1]} ${filtered[0]}'); // reverse order
     }
 
-    // Strategy 3: Next combination — second line alone
-    if (filtered.length >= 2 && !queries.contains(filtered[1])) {
-      queries.add(filtered[1]);
+    // Strategy 3: Individual lines
+    for (int i = 1; i < filtered.length && i < 4; i++) {
+      if (!queries.contains(filtered[i])) {
+        queries.add(filtered[i]);
+      }
     }
 
-    // Strategy 4: Top 3 lines joined (for covers with lots of text)
+    // Strategy 4: All meaningful lines combined (wide net)
     if (filtered.length >= 3) {
-      final joined = filtered.take(3).join(' ');
+      final joined = filtered.take(4).join(' ');
       if (joined.length <= 200 && !queries.contains(joined)) {
         queries.add(joined);
       }
     }
 
-    // Strategy 5: Top 4 lines joined (wider net)
-    if (filtered.length >= 4) {
-      final joined = filtered.take(4).join(' ');
-      if (joined.length <= 200 && !queries.contains(joined)) {
+    // Strategy 5: Artist-first combinations (common layout: artist top, title bottom)
+    if (filtered.length >= 2) {
+      // "Artist" + first 2 words of title
+      final titleWords = filtered[1].split(' ');
+      if (titleWords.length >= 2) {
+        final shortTitle = titleWords.take(2).join(' ');
+        queries.add('${filtered[0]} $shortTitle');
+      }
+      
+      // First word of artist + full title
+      final artistWords = filtered[0].split(' ');
+      if (artistWords.length >= 2) {
+        queries.add('${artistWords.first} ${filtered[1]}');
+      }
+    }
+
+    // Strategy 6: Confidence-weighted queries (high confidence lines only)
+    final highConfLines = extracted.meaningfulLines
+        .where((line) => (extracted.lineConfidences[line] ?? 0.0) >= 0.6)
+        .toList();
+    if (highConfLines.length >= 2) {
+      final joined = highConfLines.take(2).join(' ');
+      if (!queries.contains(joined)) {
         queries.add(joined);
       }
     }
@@ -206,6 +301,21 @@ class TextExtractionService {
   }
 }
 
+/// Internal class to track OCR line with metadata.
+class _OcrLine {
+  final String text;
+  final double area;
+  final double confidence;
+  final bool isMetadata;
+
+  _OcrLine({
+    required this.text,
+    required this.area,
+    required this.confidence,
+    required this.isMetadata,
+  });
+}
+
 /// Parsed OCR result from album cover.
 class ExtractedText {
   final String rawText;
@@ -218,8 +328,14 @@ class ExtractedText {
   /// Lines with metadata/noise removed, sorted by bounding-box area (largest first).
   final List<String> filteredLines;
 
+  /// All meaningful lines (including metadata but with low confidence filtered).
+  final List<String> meaningfulLines;
+
   /// Bounding-box area for each filtered line (text -> area in px²).
   final Map<String, double> boundingBoxAreas;
+
+  /// Confidence for each line (text -> confidence 0.0-1.0).
+  final Map<String, double> lineConfidences;
 
   const ExtractedText({
     required this.rawText,
@@ -229,7 +345,9 @@ class ExtractedText {
     required this.bottomText,
     required this.blockCount,
     this.filteredLines = const [],
+    this.meaningfulLines = const [],
     this.boundingBoxAreas = const {},
+    this.lineConfidences = const {},
   });
 
   factory ExtractedText.empty() => const ExtractedText(
@@ -240,7 +358,9 @@ class ExtractedText {
         bottomText: [],
         blockCount: 0,
         filteredLines: [],
+        meaningfulLines: [],
         boundingBoxAreas: {},
+        lineConfidences: {},
       );
 
   bool get hasText => rawText.isNotEmpty;

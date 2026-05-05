@@ -206,6 +206,10 @@ class RecognitionService {
         }
       }
 
+      // Collect all queries from all sources for ensemble search
+      final allQueries = <String>[];
+      final querySources = <String, String>{}; // query -> source
+
       // Step 2: OCR text extraction with filtering
       debugPrint('[Recognition] Step 2: OCR text extraction...');
       List<String> ocrQueries = [];
@@ -219,6 +223,12 @@ class RecognitionService {
             _ocrHasText = extracted.filteredLines.isNotEmpty;
             ocrQueries = _textExtraction!.generateSearchQueries(extracted);
             debugPrint('[Recognition] OCR generated queries: $ocrQueries');
+            for (final q in ocrQueries) {
+              if (!allQueries.contains(q)) {
+                allQueries.add(q);
+                querySources[q] = 'ocr';
+              }
+            }
           }
         } catch (e) {
           debugPrint('[Recognition] OCR ERROR: $e');
@@ -243,8 +253,9 @@ class RecognitionService {
               // Parse VLM response - extract artist and album
               smolvlmQuery = _parseSmolVLMResponse(vlmResult);
               debugPrint('[Recognition] SmolVLM parsed query: "$smolvlmQuery"');
-              if (smolvlmQuery != null) {
-                ocrQueries.insert(0, smolvlmQuery);
+              if (smolvlmQuery != null && !allQueries.contains(smolvlmQuery)) {
+                allQueries.insert(0, smolvlmQuery); // SmolVLM gets priority
+                querySources[smolvlmQuery] = 'smolvlm';
               }
             }
           }
@@ -255,31 +266,31 @@ class RecognitionService {
         debugPrint('[Recognition] SmolVLM: not available');
       }
 
-      // Step 3: MusicBrainz search with ALL queries + scoring
-      debugPrint('[Recognition] Step 3: MusicBrainz multi-query search...');
-      if (ocrQueries.isNotEmpty) {
-        final mbResult = await _searchMusicBrainzScored(ocrQueries);
-        if (mbResult != null) {
-          return mbResult;
-        }
-      }
-
-      // Step 4: Image labeling (only if no OCR text found)
-      debugPrint('[Recognition] Step 4: Image labeling (artwork-only fallback)...');
-      String? labelQuery;
-      if (!_ocrHasText && _imageLabeler != null) {
+      // Step 3: Image labeling (adds genre/style hints)
+      debugPrint('[Recognition] Step 3: Image labeling...');
+      List<String> labelQueries = [];
+      if (_imageLabeler != null) {
         try {
           final analysis = await _imageLabeler!.analyzeCover(imagePath);
           debugPrint('[Recognition] Labels: ${analysis.labelTexts}');
           debugPrint('[Recognition] CoverType: ${analysis.coverType}, genres: ${analysis.detectedGenres}');
           if (analysis.labels.isNotEmpty) {
-            // Only use label if confidence > 0.7
-            final bestLabel = analysis.labels.reduce(
-              (a, b) => a.confidence > b.confidence ? a : b,
-            );
-            if (bestLabel.confidence > 0.7) {
-              labelQuery = bestLabel.label;
-              debugPrint('[Recognition] Best label: "$labelQuery" (${(bestLabel.confidence * 100).toStringAsFixed(0)}%)');
+            // Only use high-confidence labels (>0.7)
+            for (final label in analysis.labels) {
+              if (label.confidence > 0.7) {
+                final labelText = label.label.toLowerCase();
+                // Only add meaningful labels (not generic ones)
+                if (!_isGenericLabel(labelText)) {
+                  labelQueries.add(labelText);
+                }
+              }
+            }
+            debugPrint('[Recognition] Label queries: $labelQueries');
+            for (final q in labelQueries) {
+              if (!allQueries.contains(q)) {
+                allQueries.add(q);
+                querySources[q] = 'label';
+              }
             }
           }
         } catch (e) {
@@ -287,29 +298,39 @@ class RecognitionService {
         }
       }
 
-      // Step 5: TFLite
+      // Step 4: MusicBrainz ensemble search with ALL queries + scoring
+      debugPrint('[Recognition] Step 4: MusicBrainz ensemble search...');
+      debugPrint('[Recognition] All queries (${allQueries.length}): $allQueries');
+      if (allQueries.isNotEmpty) {
+        final mbResult = await _searchMusicBrainzEnsemble(allQueries, querySources);
+        if (mbResult != null) {
+          return mbResult;
+        }
+      }
+
+      // Step 5: TFLite (fallback for artwork-only covers)
       debugPrint('[Recognition] Step 5: TFLite classification...');
-      if (labelQuery == null && !_ocrHasText && _tfliteService != null) {
+      String? tfliteQuery;
+      if (!_ocrHasText && _tfliteService != null) {
         if (_tfliteService!.isModelLoaded) {
           try {
             final labels = await _tfliteService!.classify(imagePath);
             debugPrint('[Recognition] TFLite labels: $labels');
-            if (labels.isNotEmpty) labelQuery = labels.first.key;
+            if (labels.isNotEmpty) {
+              tfliteQuery = labels.first.key;
+              if (!allQueries.contains(tfliteQuery)) {
+                allQueries.add(tfliteQuery);
+                querySources[tfliteQuery] = 'tflite';
+              }
+            }
           } catch (e) {
             debugPrint('[Recognition] TFLite ERROR: $e');
           }
         }
       }
 
-      // Step 6: Try MusicBrainz with label query
-      if (labelQuery != null) {
-        debugPrint('[Recognition] Step 6: MB with label query "$labelQuery"...');
-        final mbResult = await _searchMusicBrainzScored([labelQuery], minScore: 0.3);
-        if (mbResult != null) return mbResult;
-      }
-
-      // Step 7: Cloud Vision (for artwork-only covers)
-      debugPrint('[Recognition] Step 7: Cloud Vision (Google Cloud Vision API)...');
+      // Step 6: Cloud Vision (for artwork-only covers)
+      debugPrint('[Recognition] Step 6: Cloud Vision (Google Cloud Vision API)...');
       if (!_ocrHasText && _cloudVision.isConfigured) {
         try {
           final cvResult = await _cloudVision.identifyAlbumCover(imagePath);
@@ -324,7 +345,11 @@ class RecognitionService {
               final cvQuery = (artist.isNotEmpty && title.isNotEmpty)
                   ? '$artist $title'
                   : artist.isNotEmpty ? artist : title;
-              final mbResult = await _searchMusicBrainzScored([cvQuery], minScore: 0.2);
+              if (!allQueries.contains(cvQuery)) {
+                allQueries.add(cvQuery);
+                querySources[cvQuery] = 'cloudvision';
+              }
+              final mbResult = await _searchMusicBrainzEnsemble(allQueries, querySources, minScore: 0.2);
               if (mbResult != null) {
                 // Add Cloud Vision source tag
                 return RecognitionResult(
@@ -353,7 +378,11 @@ class RecognitionService {
               );
             } else if (query.isNotEmpty) {
               // Cloud Vision returned labels as query hint
-              final mbResult = await _searchMusicBrainzScored([query], minScore: 0.2);
+              if (!allQueries.contains(query)) {
+                allQueries.add(query);
+                querySources[query] = 'cloudvision';
+              }
+              final mbResult = await _searchMusicBrainzEnsemble(allQueries, querySources, minScore: 0.2);
               if (mbResult != null) return mbResult;
             }
           }
@@ -364,8 +393,8 @@ class RecognitionService {
         debugPrint('[Recognition] CloudVision not configured (no API key)');
       }
 
-      // Step 8: Offline recognition
-      debugPrint('[Recognition] Step 8: Offline recognition...');
+      // Step 7: Offline recognition
+      debugPrint('[Recognition] Step 7: Offline recognition...');
       if (_offlineService != null) {
         try {
           final offlineResult = await _offlineService!.recognize(imagePath);
@@ -391,10 +420,9 @@ class RecognitionService {
         }
       }
 
-      // Step 9: Discogs fallback with all queries
-      debugPrint('[Recognition] Step 9: Discogs fallback...');
-      final discogsQueries = ocrQueries.isNotEmpty ? ocrQueries : (labelQuery != null ? [labelQuery] : <String>[]);
-      for (final query in discogsQueries) {
+      // Step 8: Discogs fallback with all queries
+      debugPrint('[Recognition] Step 8: Discogs fallback...');
+      for (final query in allQueries) {
         try {
           final discogsResults = await _discogs.searchRelease(query);
           debugPrint('[Recognition] Discogs "$query": ${discogsResults.length} results');
@@ -428,16 +456,31 @@ class RecognitionService {
     }
   }
 
-  /// Search MusicBrainz with multiple queries, score results, return best match.
-  /// Only returns results above [minScore] threshold.
-  Future<RecognitionResult?> _searchMusicBrainzScored(
-    List<String> queries, {
+  /// Check if an image label is too generic to be useful for search.
+  bool _isGenericLabel(String label) {
+    final genericLabels = {
+      'poster', 'advertisement', 'text', 'font', 'logo', 'brand',
+      'product', 'rectangle', 'square', 'circle', 'shape',
+      'screenshot', 'paper', 'cardboard', 'packaging',
+    };
+    return genericLabels.contains(label);
+  }
+
+  /// Search MusicBrainz with multiple queries from multiple sources,
+  /// score results, and return best match using ensemble voting.
+  /// 
+  /// Ensemble scoring: if multiple queries agree on the same album,
+  /// boost the confidence significantly.
+  Future<RecognitionResult?> _searchMusicBrainzEnsemble(
+    List<String> queries,
+    Map<String, String> querySources, {
     double minScore = 0.4,
   }) async {
-    _MatchCandidate? bestMatch;
+    // Collect all candidates across all queries
+    final candidates = <String, _EnsembleCandidate>{}; // key: "artist|title"
 
     for (final query in queries) {
-      debugPrint('[Recognition] MB query: "$query"');
+      debugPrint('[Recognition] MB query: "$query" (source: ${querySources[query]})');
       try {
         final mbRaw = await _musicBrainz.searchRelease(query: query, limit: 5);
         for (final release in mbRaw) {
@@ -446,52 +489,74 @@ class RecognitionService {
               ? (artistCredit[0]['name'] ?? artistCredit[0]['artist']?['name'] ?? 'Unknown').toString()
               : 'Unknown';
           final title = release['title']?.toString() ?? 'Unknown';
+          final key = '$artistName|$title';
 
           final score = _calculateMatchScore(query, artistName, title);
           debugPrint('[Recognition]   MB: "$artistName" - "$title" score=${score.toStringAsFixed(2)}');
 
-          if (score >= minScore && (bestMatch == null || score > bestMatch.score)) {
-            bestMatch = _MatchCandidate(
-              artist: artistName,
-              title: title,
-              date: release['date']?.toString(),
-              mbid: release['id']?.toString(),
-              score: score,
-              query: query,
-            );
+          if (score >= minScore) {
+            if (candidates.containsKey(key)) {
+              // This album was found by another query too - boost!
+              candidates[key]!.addVote(score, query, querySources[query] ?? 'unknown');
+            } else {
+              candidates[key] = _EnsembleCandidate(
+                artist: artistName,
+                title: title,
+                date: release['date']?.toString(),
+                mbid: release['id']?.toString(),
+                score: score,
+                query: query,
+                source: querySources[query] ?? 'unknown',
+              );
+            }
           }
         }
       } catch (e) {
         debugPrint('[Recognition] MB query "$query" ERROR: $e');
       }
-
-      // If we found a good match, no need to try more queries
-      if (bestMatch != null && bestMatch.score >= 0.7) break;
     }
 
-    if (bestMatch != null) {
-      debugPrint('[Recognition] BEST MATCH: "${bestMatch.artist}" - "${bestMatch.title}" '
-          'score=${bestMatch.score.toStringAsFixed(2)} query="${bestMatch.query}"');
+    if (candidates.isEmpty) {
+      debugPrint('[Recognition] No MB match above threshold $minScore');
+      return null;
+    }
+
+    // Find best candidate using ensemble scoring
+    _EnsembleCandidate? best;
+    for (final candidate in candidates.values) {
+      // Ensemble boost: if multiple sources agree, significantly increase score
+      final ensembleScore = candidate.ensembleScore;
+      debugPrint('[Recognition] Candidate: "${candidate.artist}" - "${candidate.title}" '
+          'baseScore=${candidate.baseScore.toStringAsFixed(2)} votes=${candidate.voteCount} '
+          'ensembleScore=${ensembleScore.toStringAsFixed(2)}');
+      
+      if (best == null || ensembleScore > best.ensembleScore) {
+        best = candidate;
+      }
+    }
+
+    if (best != null && best.ensembleScore >= minScore) {
+      debugPrint('[Recognition] BEST MATCH: "${best.artist}" - "${best.title}" '
+          'ensembleScore=${best.ensembleScore.toStringAsFixed(2)} votes=${best.voteCount}');
       final album = Album(
         id: const Uuid().v4(),
-        title: bestMatch.title,
-        artist: bestMatch.artist,
-        releaseYear: _parseYear(bestMatch.date),
+        title: best.title,
+        artist: best.artist,
+        releaseYear: _parseYear(best.date),
         dateAdded: DateTime.now(),
-        musicBrainzId: bestMatch.mbid,
-        recognitionConfidence: bestMatch.score,
+        musicBrainzId: best.mbid,
+        recognitionConfidence: best.ensembleScore,
         userPhotoPath: '', // Will be set by caller
       );
       return RecognitionResult(
         state: RecognitionState.success,
         album: album,
-        confidence: bestMatch.score,
-        source: 'online',
-        message: 'Found via MusicBrainz (score: ${(bestMatch.score * 100).toStringAsFixed(0)}%)',
+        confidence: best.ensembleScore,
+        source: best.voteCount > 1 ? 'ensemble' : 'online',
+        message: 'Found via MusicBrainz (score: ${(best.ensembleScore * 100).toStringAsFixed(0)}%, votes: ${best.voteCount})',
       );
     }
 
-    debugPrint('[Recognition] No MB match above threshold $minScore');
     return null;
   }
 
@@ -563,4 +628,64 @@ class _MatchCandidate {
     required this.score,
     required this.query,
   });
+}
+
+/// Ensemble candidate that accumulates votes from multiple queries.
+class _EnsembleCandidate {
+  final String artist;
+  final String title;
+  final String? date;
+  final String? mbid;
+  double baseScore;
+  String primaryQuery;
+  String primarySource;
+  int voteCount;
+  final Set<String> sources;
+
+  _EnsembleCandidate({
+    required this.artist,
+    required this.title,
+    this.date,
+    this.mbid,
+    required double score,
+    required String query,
+    required String source,
+  })  : baseScore = score,
+        primaryQuery = query,
+        primarySource = source,
+        voteCount = 1,
+        sources = {source};
+
+  void addVote(double score, String query, String source) {
+    // Average the scores
+    baseScore = (baseScore * voteCount + score) / (voteCount + 1);
+    voteCount++;
+    sources.add(source);
+    // Keep the query with highest individual score as primary
+    if (score > baseScore) {
+      primaryQuery = query;
+    }
+  }
+
+  /// Ensemble score with boost for multiple agreeing sources.
+  double get ensembleScore {
+    // Base score from all queries
+    var score = baseScore;
+    
+    // Boost for multiple votes (agreement between queries)
+    if (voteCount >= 3) {
+      score += 0.25; // Strong agreement
+    } else if (voteCount == 2) {
+      score += 0.15; // Moderate agreement
+    }
+    
+    // Boost for diverse sources (OCR + SmolVLM + Labeler agree)
+    if (sources.length >= 3) {
+      score += 0.1;
+    } else if (sources.length == 2) {
+      score += 0.05;
+    }
+    
+    return score.clamp(0.0, 1.0);
+  }
 }
