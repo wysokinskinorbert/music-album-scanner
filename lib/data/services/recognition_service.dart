@@ -59,6 +59,7 @@ class RecognitionService {
 
   /// Calculate fuzzy match score between OCR text and a MusicBrainz result.
   /// Returns 0.0 - 1.0 where 1.0 = perfect match.
+  /// Rejects results where query is too generic (e.g. "Hat" matching "Nits - Hat").
   double _calculateMatchScore(String query, String artist, String title) {
     final queryLower = query.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\s]'), '');
     final artistLower = artist.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\s]'), '');
@@ -66,19 +67,31 @@ class RecognitionService {
     final combinedLower = '$artistLower $titleLower';
     final combinedReverse = '$titleLower $artistLower';
 
-    double score = 0.0;
+    // Reject very short queries (likely false positives from ImageLabeler)
+    if (queryLower.length < 3) return 0.0;
+
+    // Reject single-word queries that are common/generic words
+    final genericWords = {'hat', 'neon', 'insect', 'gold', 'disc', 'blue', 'red', 'black', 'white',
+      'original', 'remaster', 'digital', 'analog', 'vinyl', 'cd', 'lp', 'ep'};
     final queryWords = queryLower.split(RegExp(r'\s+'));
+    if (queryWords.length == 1 && genericWords.contains(queryLower)) {
+      return 0.0; // Generic single word should not match anything
+    }
+
+    double score = 0.0;
 
     // Count how many query words appear in artist or title
     int matchedWords = 0;
+    int meaningfulWords = 0;
     for (final word in queryWords) {
-      if (word.length < 2) continue; // Skip single chars
+      if (word.length < 3) continue; // Skip short words
+      meaningfulWords++;
       if (artistLower.contains(word) || titleLower.contains(word)) {
         matchedWords++;
       }
     }
-    if (queryWords.where((w) => w.length >= 2).isEmpty) return 0.0;
-    score = matchedWords / queryWords.where((w) => w.length >= 2).length;
+    if (meaningfulWords == 0) return 0.0;
+    score = matchedWords / meaningfulWords;
 
     // Bonus: query is a substring of "Artist Title" or "Title Artist"
     if (combinedLower.contains(queryLower) || combinedReverse.contains(queryLower)) {
@@ -88,6 +101,24 @@ class RecognitionService {
     // Bonus: exact artist match
     if (artistLower == queryLower || queryLower.contains(artistLower)) {
       score += 0.2;
+    }
+
+    // Penalty: if query is a single word and it's only in the title (not artist),
+    // it's likely a false positive (e.g. "Hat" -> "Nits - Hat")
+    if (queryWords.length == 1 && titleLower.contains(queryLower) && !artistLower.contains(queryLower)) {
+      score *= 0.3; // Heavy penalty for single-word title-only matches
+    }
+
+    // Penalty: if artist is completely different from all query words
+    bool artistHasAnyWord = false;
+    for (final word in queryWords) {
+      if (word.length >= 3 && artistLower.contains(word)) {
+        artistHasAnyWord = true;
+        break;
+      }
+    }
+    if (!artistHasAnyWord && meaningfulWords > 0) {
+      score *= 0.5; // Penalty when artist doesn't match any query word
     }
 
     return score.clamp(0.0, 1.0);
