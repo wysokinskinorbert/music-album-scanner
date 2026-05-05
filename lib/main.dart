@@ -7,6 +7,8 @@ import 'data/models/album_model.g.dart';
 import 'data/repositories/album_repository.dart';
 import 'data/services/storage/local_storage_service.dart';
 import 'data/services/recognition_service.dart';
+import 'data/services/ml/text_extraction_service.dart';
+import 'data/services/ml/image_labeling_service.dart';
 import 'core/network/api_client.dart';
 import 'features/home/home_screen.dart';
 
@@ -21,7 +23,14 @@ void main() async {
   final storage = LocalStorageService();
   await storage.init();
 
-  final recognition = RecognitionService(apiClient: apiClient);
+  final textExtraction = TextExtractionService();
+  final imageLabeler = ImageLabelingService();
+
+  final recognition = RecognitionService(
+    apiClient: apiClient,
+    textExtraction: textExtraction,
+    imageLabeler: imageLabeler,
+  );
   final repository = AlbumRepository(storage);
 
   runApp(MusicAlbumScannerApp(

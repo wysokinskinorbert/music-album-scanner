@@ -5,6 +5,8 @@ import '../models/recognition_result.dart';
 import 'api/musicbrainz_service.dart';
 import 'api/discogs_service.dart';
 import 'ml/barcode_scanning_service.dart';
+import 'ml/text_extraction_service.dart';
+import 'ml/image_labeling_service.dart';
 import 'offline/offline_recognition_service.dart';
 import 'ml/tflite_inference_service.dart';
 import '../../core/network/api_client.dart';
@@ -17,6 +19,8 @@ class RecognitionService {
   final BarcodeScanningService _barcodeService;
   final TfliteInferenceService? _tfliteService;
   final OfflineRecognitionService? _offlineService;
+  final TextExtractionService? _textExtraction;
+  final ImageLabelingService? _imageLabeler;
 
   RecognitionService({
     required ApiClient apiClient,
@@ -25,12 +29,16 @@ class RecognitionService {
     BarcodeScanningService? barcodeService,
     TfliteInferenceService? tfliteService,
     OfflineRecognitionService? offlineService,
+    TextExtractionService? textExtraction,
+    ImageLabelingService? imageLabeler,
   })  : _apiClient = apiClient,
         _musicBrainz = musicBrainz ?? MusicBrainzService(ApiClient()),
         _discogs = discogs ?? DiscogsService(),
         _barcodeService = barcodeService ?? BarcodeScanningService(),
         _tfliteService = tfliteService,
-        _offlineService = offlineService;
+        _offlineService = offlineService,
+        _textExtraction = textExtraction,
+        _imageLabeler = imageLabeler;
 
   /// Main recognition pipeline
   Future<RecognitionResult> recognizeFromImage(String imagePath) async {
@@ -50,7 +58,45 @@ class RecognitionService {
         }
       }
 
-      // Step 2: Try offline/TFLite
+      // Step 2: OCR text extraction -- primary path for covers with text
+      String? searchQuery;
+      if (_textExtraction != null) {
+        try {
+          final extracted = await _textExtraction!.extractText(imagePath);
+          if (extracted.hasText) {
+            final queries = _textExtraction!.generateSearchQueries(extracted);
+            if (queries.isNotEmpty) {
+              searchQuery = queries.first;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Step 3: Image labeling -- fallback when OCR finds no text
+      if (searchQuery == null && _imageLabeler != null) {
+        try {
+          final analysis = await _imageLabeler!.analyzeCover(imagePath);
+          if (analysis.labels.isNotEmpty) {
+            // Use highest-confidence label as search query
+            final bestLabel = analysis.labels.reduce(
+              (a, b) => a.confidence > b.confidence ? a : b,
+            );
+            searchQuery = bestLabel.label;
+          }
+        } catch (_) {}
+      }
+
+      // Step 4: TFLite classification -- additional fallback
+      if (searchQuery == null &&
+          _tfliteService != null &&
+          _tfliteService!.isModelLoaded) {
+        try {
+          final labels = await _tfliteService!.classify(imagePath);
+          if (labels.isNotEmpty) searchQuery = labels.first.key;
+        } catch (_) {}
+      }
+
+      // Step 5: Offline recognition
       if (_offlineService != null) {
         try {
           final offlineResult = await _offlineService!.recognize(imagePath);
@@ -73,42 +119,51 @@ class RecognitionService {
         } catch (_) {}
       }
 
-      // Step 3: ML classification hints
-      String? searchQuery;
-      if (_tfliteService != null && _tfliteService!.isModelLoaded) {
-        try {
-          final labels = await _tfliteService!.classify(imagePath);
-          if (labels.isNotEmpty) searchQuery = labels.first.key;
-        } catch (_) {}
-      }
-
-      // Step 4: MusicBrainz (returns List<Map>, need to parse)
+      // Step 6: MusicBrainz search with best available query
       if (searchQuery != null) {
-        try {
-          final mbRaw = await _musicBrainz.searchRelease(query: searchQuery);
-          if (mbRaw.isNotEmpty) {
-            final first = mbRaw.first;
-            final album = Album(
-              id: const Uuid().v4(),
-              title: first['title']?.toString() ?? 'Unknown',
-              artist: first['artist-credit']?[0]?['name']?.toString() ?? 'Unknown',
-              releaseYear: int.tryParse(first['date']?.toString().substring(0, 4) ?? ''),
-              dateAdded: DateTime.now(),
-              musicBrainzId: first['id']?.toString(),
-              recognitionConfidence: 0.5,
-              userPhotoPath: imagePath,
-            );
-            return RecognitionResult(
-              state: RecognitionState.success,
-              album: album,
-              confidence: 0.5,
-              source: 'online',
-            );
-          }
-        } catch (_) {}
+        // Try each OCR query strategy before falling back
+        List<String> allQueries = [];
+        if (_textExtraction != null) {
+          try {
+            final extracted = await _textExtraction!.extractText(imagePath);
+            if (extracted.hasText) {
+              allQueries = _textExtraction!.generateSearchQueries(extracted);
+            }
+          } catch (_) {}
+        }
+        if (allQueries.isEmpty) {
+          allQueries = [searchQuery];
+        }
+
+        for (final query in allQueries) {
+          try {
+            final mbRaw = await _musicBrainz.searchRelease(query: query);
+            if (mbRaw.isNotEmpty) {
+              final first = mbRaw.first;
+              final album = Album(
+                id: const Uuid().v4(),
+                title: first['title']?.toString() ?? 'Unknown',
+                artist: first['artist-credit']?[0]?['name']?.toString() ??
+                    'Unknown',
+                releaseYear: int.tryParse(
+                    first['date']?.toString().substring(0, 4) ?? ''),
+                dateAdded: DateTime.now(),
+                musicBrainzId: first['id']?.toString(),
+                recognitionConfidence: 0.5,
+                userPhotoPath: imagePath,
+              );
+              return RecognitionResult(
+                state: RecognitionState.success,
+                album: album,
+                confidence: 0.5,
+                source: 'online',
+              );
+            }
+          } catch (_) {}
+        }
       }
 
-      // Step 5: Discogs (returns List<Album> directly)
+      // Step 7: Discogs fallback
       if (searchQuery != null) {
         try {
           final discogsResults = await _discogs.searchRelease(searchQuery);
