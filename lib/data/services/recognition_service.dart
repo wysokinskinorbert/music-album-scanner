@@ -100,6 +100,18 @@ class RecognitionService {
     
     // If we got something meaningful (>= 3 chars), use it as-is
     if (cleaned.length >= 3 && cleaned.length <= 200) {
+      // Reject useless single-word responses
+      final uselessResponses = {
+        'cover', 'cover.', 'album', 'album cover', 'music', 'art',
+        'yes', 'no', 'unknown', 'n/a', 'none', 'the', 'a', 'an',
+      };
+      if (uselessResponses.contains(cleaned.toLowerCase())) {
+        return null;
+      }
+      // Reject responses that are just numbers or single short words
+      if (cleaned.replaceAll(RegExp(r'[a-z.]'), '').length == 0 && cleaned.length < 5) {
+        return null;
+      }
       return cleaned;
     }
     
@@ -121,7 +133,9 @@ class RecognitionService {
 
     // Reject single-word queries that are common/generic words
     final genericWords = {'hat', 'neon', 'insect', 'gold', 'disc', 'blue', 'red', 'black', 'white',
-      'original', 'remaster', 'digital', 'analog', 'vinyl', 'cd', 'lp', 'ep'};
+      'original', 'remaster', 'digital', 'analog', 'vinyl', 'cd', 'lp', 'ep',
+      'helmet', 'cap', 'glasses', 'goggles', 'mask', 'cover', 'album', 'music',
+      'art', 'design', 'photo', 'image', 'picture', 'graphic'};
     final queryWords = queryLower.split(RegExp(r'\s+'));
     if (queryWords.length == 1 && genericWords.contains(queryLower)) {
       return 0.0; // Generic single word should not match anything
@@ -467,6 +481,11 @@ class RecognitionService {
       'poster', 'advertisement', 'text', 'font', 'logo', 'brand',
       'product', 'rectangle', 'square', 'circle', 'shape',
       'screenshot', 'paper', 'cardboard', 'packaging',
+      // Objects commonly misidentified on album covers
+      'helmet', 'hat', 'cap', 'glasses', 'goggles', 'mask',
+      // Generic descriptors
+      'music', 'album', 'cover', 'art', 'design', 'illustration',
+      'photograph', 'image', 'picture', 'graphic',
     };
     return genericLabels.contains(label);
   }
@@ -677,8 +696,15 @@ class _EnsembleCandidate {
     // Base score from all queries
     var score = baseScore;
     
+    // Single-vote penalty: one query finding a match is unreliable
+    if (voteCount == 1) {
+      score *= 0.6; // 40% penalty for single vote
+    }
+    
     // Boost for multiple votes (agreement between queries)
-    if (voteCount >= 3) {
+    if (voteCount >= 5) {
+      score += 0.30; // Very strong agreement
+    } else if (voteCount >= 3) {
       score += 0.25; // Strong agreement
     } else if (voteCount == 2) {
       score += 0.15; // Moderate agreement
