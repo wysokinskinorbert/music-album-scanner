@@ -127,13 +127,7 @@ class SmolVLMBridge(private val context: Context) {
             }
         }
 
-        val prompt = "This is a music album cover. Identify the artist and album title. " +
-                "Reply with EXACTLY this format: Artist - Album\n" +
-                "Examples: Pink Floyd - The Dark Side of the Moon\n" +
-                "          Radiohead - OK Computer\n" +
-                "          Miles Davis - Kind of Blue\n" +
-                "Be specific. Use the exact spelling from the cover." +
-                "Reply with ONLY the artist and album, nothing else."
+        val prompt = "What album cover is this? Reply ONLY: Artist - Album"
         return processImage(imagePath, prompt)
     }
 

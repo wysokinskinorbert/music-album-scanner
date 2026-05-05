@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../core/network/api_client.dart';
 import '../../data/services/recognition_service.dart';
 import '../../data/models/recognition_result.dart';
+import '../../data/services/ml/text_extraction_service.dart';
+import '../../data/services/ml/image_labeling_service.dart';
 import '../../services/smolvlm_service.dart';
 
 /// Batch test screen that runs the FULL ENSEMBLE pipeline on all 19 covers.
@@ -29,6 +30,8 @@ class _EnsembleBatchTestScreenState extends State<EnsembleBatchTestScreen> {
     super.initState();
     _recognitionService = RecognitionService(
       apiClient: ApiClient(),
+      textExtraction: TextExtractionService(),
+      imageLabeler: ImageLabelingService(),
       smolVLM: SmolVLMService(),
     );
   }
