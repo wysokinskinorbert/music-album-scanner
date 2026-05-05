@@ -44,24 +44,15 @@ class TextExtractionService {
     return false;
   }
 
-  /// Minimum confidence threshold for OCR lines to be considered reliable.
-  static const double _minConfidence = 0.55;
-
   /// Sort OCR lines by bounding-box area, largest first.
   /// Largest text on a cover is most likely the album title or artist name.
-  /// Metadata lines and low-confidence lines (< [_minConfidence]) are filtered out.
+  /// Metadata lines are filtered out before sorting.
   List<String> _sortLinesBySize(RecognizedText recognizedText) {
     final linesWithSize = <MapEntry<String, double>>[];
     for (final block in recognizedText.blocks) {
       for (final line in block.lines) {
         final text = line.text.trim();
         if (text.isEmpty || _isLikelyMetadata(text)) continue;
-        // Skip low-confidence lines (stylised fonts, artefacts, etc.)
-        final conf = line.confidence ?? 1.0;
-        if (conf < _minConfidence) {
-          debugPrint('[TextExtraction]   SKIPPED low-confidence: "$text" conf=$conf');
-          continue;
-        }
         final bb = line.boundingBox;
         final area = bb.width * bb.height;
         linesWithSize.add(MapEntry(text, area));
