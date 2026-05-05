@@ -40,7 +40,7 @@ class DiscogsService {
       queryParameters: queryParams,
     );
 
-    final data = response as Map<String, dynamic>;
+    final data = response.data as Map<String, dynamic>;
     final results = data['results'] as List<dynamic>? ?? [];
     return results.cast<Map<String, dynamic>>();
   }

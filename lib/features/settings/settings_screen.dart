@@ -4,6 +4,8 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/repositories/album_repository.dart';
 import '../../data/services/ml/model/model_download_manager.dart';
+import '../../data/services/recognition_service.dart';
+import '../../data/services/api/cloud_vision_service.dart';
 import '../import_export/import_screen.dart';
 import '../sharing/share_export_screen.dart';
 import 'model_download_screen.dart';
@@ -149,6 +151,10 @@ class SettingsScreen extends StatelessWidget {
                   trailing: const Icon(Icons.check_circle, color: AppColors.success, size: 20),
                 ),
               ]),
+              const SizedBox(height: 24),
+
+              // --- Cloud Vision Section ---
+              _CloudVisionSection(),
               const SizedBox(height: 24),
 
               // --- Data Section ---
@@ -410,6 +416,219 @@ class SettingsScreen extends StatelessWidget {
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Cloud Vision API settings section with quota display.
+class _CloudVisionSection extends StatefulWidget {
+  @override
+  State<_CloudVisionSection> createState() => _CloudVisionSectionState();
+}
+
+class _CloudVisionSectionState extends State<_CloudVisionSection> {
+  final CloudVisionService _cloudVision = CloudVisionService();
+  int _usedThisMonth = 0;
+  bool _isLoading = true;
+  bool _isConfigured = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatus();
+  }
+
+  Future<void> _loadStatus() async {
+    await _cloudVision.loadConfig();
+    final used = await _cloudVision.getUsedThisMonth();
+    if (mounted) {
+      setState(() {
+        _usedThisMonth = used;
+        _isConfigured = _cloudVision.isConfigured;
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = _cloudVision.monthlyLimit - _usedThisMonth;
+    final percent = _usedThisMonth / _cloudVision.monthlyLimit;
+
+    return _buildSection('Cloud Vision (Artwork-Only Covers)', [
+      _buildTile(
+        icon: Icons.cloud_outlined,
+        title: 'Google Cloud Vision API Key',
+        subtitle: _isConfigured
+            ? 'Configured ✓'
+            : 'Not set - add key for artwork-only cover recognition',
+        trailing: Icon(
+          _isConfigured ? Icons.check_circle : Icons.arrow_forward_ios,
+          color: _isConfigured ? AppColors.success : AppColors.textTertiary,
+          size: 20,
+        ),
+        onTap: () => _showApiKeyDialog(context),
+      ),
+      if (_isConfigured) ...[
+        _buildTile(
+          icon: Icons.data_usage_outlined,
+          title: 'Monthly Quota',
+          subtitle: 'Free tier: ${_cloudVision.monthlyLimit} images/month',
+          trailing: Text(
+            '$remaining left',
+            style: TextStyle(
+              color: remaining < 100 ? AppColors.error : AppColors.success,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: percent,
+              backgroundColor: AppColors.surface,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                percent > 0.8 ? AppColors.error : AppColors.primary,
+              ),
+              minHeight: 6,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+          child: Text(
+            '$_usedThisMonth / ${_cloudVision.monthlyLimit} used this month',
+            style: const TextStyle(
+              color: AppColors.textTertiary,
+              fontSize: 11,
+            ),
+          ),
+        ),
+      ],
+      _buildTile(
+        icon: Icons.info_outline,
+        title: 'How it works',
+        subtitle: 'Identifies covers without text via reverse image search. '
+            'Free 1000/month. Requires Google Cloud API key.',
+        trailing: const Icon(Icons.help_outline, color: AppColors.textTertiary, size: 18),
+      ),
+    ]);
+  }
+
+  Widget _buildSection(String title, List<Widget> children) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            title,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(children: children),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) {
+    return ListTile(
+      dense: true,
+      leading: Icon(icon, color: AppColors.primary, size: 20),
+      title: Text(title, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+      subtitle: Text(subtitle, style: const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+      trailing: trailing,
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+    );
+  }
+
+  void _showApiKeyDialog(BuildContext context) {
+    final controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Google Cloud Vision API Key'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'To use artwork-only cover recognition:\n\n'
+              '1. Go to console.cloud.google.com\n'
+              '2. Create a project & enable Cloud Vision API\n'
+              '3. Create credentials > API Key\n'
+              '4. Paste the key below\n\n'
+              'Free: 1000 images/month. Commercial use OK.',
+              style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: 'AIza...',
+                hintStyle: const TextStyle(color: AppColors.textTertiary),
+                filled: true,
+                fillColor: AppColors.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+            ),
+          ],
+        ),
+        actions: [
+          if (_isConfigured)
+            TextButton(
+              onPressed: () async {
+                await _cloudVision.clearApiKey();
+                Navigator.pop(ctx);
+                _loadStatus();
+              },
+              child: const Text('Remove Key', style: TextStyle(color: AppColors.error)),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final key = controller.text.trim();
+              if (key.isNotEmpty) {
+                await _cloudVision.setApiKey(key);
+                Navigator.pop(ctx);
+                _loadStatus();
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('Save'),
           ),
         ],
       ),

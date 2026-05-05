@@ -9,6 +9,7 @@ import 'data/services/storage/local_storage_service.dart';
 import 'data/services/recognition_service.dart';
 import 'data/services/ml/text_extraction_service.dart';
 import 'data/services/ml/image_labeling_service.dart';
+import 'data/services/api/cloud_vision_service.dart';
 import 'core/network/api_client.dart';
 import 'features/home/home_screen.dart';
 
@@ -26,10 +27,15 @@ void main() async {
   final textExtraction = TextExtractionService();
   final imageLabeler = ImageLabelingService();
 
+  // Initialize Cloud Vision service (loads API key from SharedPreferences)
+  final cloudVision = CloudVisionService();
+  await cloudVision.loadConfig();
+
   final recognition = RecognitionService(
     apiClient: apiClient,
     textExtraction: textExtraction,
     imageLabeler: imageLabeler,
+    cloudVision: cloudVision,
   );
   final repository = AlbumRepository(storage);
 

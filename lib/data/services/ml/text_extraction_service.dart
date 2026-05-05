@@ -10,6 +10,55 @@ class TextExtractionService {
     script: TextRecognitionScript.latin,
   );
 
+  /// Patterns that indicate metadata/noise printed on album covers,
+  /// not actual artist or album name information.
+  static const _metadataPatterns = [
+    'DIGITALLY', 'REMASTERED', 'REMASTER', 'ORIGINAL', 'ANALOG', 'ANALOGUE',
+    'DIGITAL', 'AUDIO', 'COMPACT', 'TOP-HIT', 'CD', 'VINYL', 'STEREO',
+    'RECORDING', 'MASTERED', 'RECORDED', 'PRESSING', 'EDITION',
+  ];
+
+  /// Returns true if a line of OCR text is likely cover metadata/noise
+  /// (e.g. "DIGITALLY REMASTERED", catalog numbers like "INT 110.604").
+  bool _isLikelyMetadata(String text) {
+    final upper = text.toUpperCase();
+
+    // Lines that are ALL CAPS and match metadata patterns
+    for (final pattern in _metadataPatterns) {
+      if (upper == pattern || (upper.contains(pattern) && upper.length < 50)) {
+        return true;
+      }
+    }
+
+    // Lines that look like catalog numbers (mostly digits/dots/slashes)
+    final alphanum = text.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+    final digitCount = alphanum.codeUnits.where((c) => c >= 48 && c <= 57).length;
+    final digitRatio = alphanum.isEmpty ? 0.0 : digitCount / alphanum.length;
+    if (digitRatio > 0.6 && alphanum.length > 3 && alphanum.length < 15) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Sort OCR lines by bounding-box area, largest first.
+  /// Largest text on a cover is most likely the album title or artist name.
+  /// Metadata lines are filtered out before sorting.
+  List<String> _sortLinesBySize(RecognizedText recognizedText) {
+    final linesWithSize = <MapEntry<String, double>>[];
+    for (final block in recognizedText.blocks) {
+      for (final line in block.lines) {
+        final text = line.text.trim();
+        if (text.isEmpty || _isLikelyMetadata(text)) continue;
+        final bb = line.boundingBox;
+        final area = bb.width * bb.height;
+        linesWithSize.add(MapEntry(text, area));
+      }
+    }
+    linesWithSize.sort((a, b) => b.value.compareTo(a.value));
+    return linesWithSize.map((e) => e.key).toList();
+  }
+
   /// Extract all text blocks from an image file.
   Future<ExtractedText> extractText(String imagePath) async {
     debugPrint('[TextExtraction] extractText path="$imagePath"');
@@ -58,8 +107,7 @@ class TextExtractionService {
       }
     }
 
-    // Heuristic: top text is more likely album title, bottom is label/credits
-    // Large text in center is typically the artist name
+    // Collect all raw lines (keeping original order)
     final lines = <String>[];
     for (final block in recognizedText.blocks) {
       for (final line in block.lines) {
@@ -70,6 +118,25 @@ class TextExtractionService {
       }
     }
 
+    // Build filtered lines (metadata removed) sorted by bounding-box area
+    final filteredLines = _sortLinesBySize(recognizedText);
+
+    // Build bounding-box area map for each filtered line
+    final boundingBoxAreas = <String, double>{};
+    for (final block in recognizedText.blocks) {
+      for (final line in block.lines) {
+        final text = line.text.trim();
+        if (text.isEmpty || _isLikelyMetadata(text)) continue;
+        final bb = line.boundingBox;
+        boundingBoxAreas[text] = bb.width * bb.height;
+      }
+    }
+
+    debugPrint('[TextExtraction] raw lines=${lines.length}, filtered lines=${filteredLines.length}');
+    for (final fl in filteredLines) {
+      debugPrint('[TextExtraction]   filtered: "$fl" area=${boundingBoxAreas[fl]?.toStringAsFixed(0)}');
+    }
+
     return ExtractedText(
       rawText: allText.join(' '),
       lines: lines,
@@ -77,45 +144,55 @@ class TextExtractionService {
       topText: topText,
       bottomText: bottomText,
       blockCount: blocks.length,
+      filteredLines: filteredLines,
+      boundingBoxAreas: boundingBoxAreas,
     );
   }
 
   /// Generate search queries from extracted text.
-  /// Tries multiple strategies to maximize MusicBrainz hit rate.
+  /// Uses FILTERED + SIZE-SORTED lines: metadata is removed first,
+  /// then lines are ordered by bounding-box area (largest = most likely
+  /// album title or artist name).
   List<String> generateSearchQueries(ExtractedText extracted) {
     final queries = <String>[];
 
-    if (extracted.lines.isEmpty) return queries;
+    final filtered = extracted.filteredLines;
+    if (filtered.isEmpty) return queries;
 
-    // Strategy 1: First line (likely album title or artist)
-    if (extracted.lines.isNotEmpty) {
-      queries.add(extracted.lines.first);
+    debugPrint('[TextExtraction] generateSearchQueries: ${filtered.length} filtered lines');
+
+    // Strategy 1: Largest text (most likely album title)
+    queries.add(filtered.first);
+
+    // Strategy 2: Top 2 largest lines combined (artist + title)
+    if (filtered.length >= 2) {
+      queries.add('${filtered[0]} ${filtered[1]}');
     }
 
-    // Strategy 2: First two lines combined (artist + title)
-    if (extracted.lines.length >= 2) {
-      queries.add('${extracted.lines[0]} ${extracted.lines[1]}');
+    // Strategy 3: Next combination — second line alone
+    if (filtered.length >= 2 && !queries.contains(filtered[1])) {
+      queries.add(filtered[1]);
     }
 
-    // Strategy 3: All text joined (for covers with lots of text)
-    if (extracted.blockCount > 2) {
-      final joined = extracted.lines.take(4).join(' ');
-      if (joined.length <= 200) {
+    // Strategy 4: Top 3 lines joined (for covers with lots of text)
+    if (filtered.length >= 3) {
+      final joined = filtered.take(3).join(' ');
+      if (joined.length <= 200 && !queries.contains(joined)) {
         queries.add(joined);
       }
     }
 
-    // Strategy 4: Largest text block (heuristic for album title)
-    String? largestBlock;
-    int maxLength = 0;
-    for (final block in extracted.blocks) {
-      if (block.text.trim().length > maxLength && block.text.trim().length <= 100) {
-        maxLength = block.text.trim().length;
-        largestBlock = block.text.trim();
+    // Strategy 5: Top 4 lines joined (wider net)
+    if (filtered.length >= 4) {
+      final joined = filtered.take(4).join(' ');
+      if (joined.length <= 200 && !queries.contains(joined)) {
+        queries.add(joined);
       }
     }
-    if (largestBlock != null && !queries.contains(largestBlock)) {
-      queries.add(largestBlock);
+
+    debugPrint('[TextExtraction] generated ${queries.length} queries:');
+    for (final q in queries) {
+      debugPrint('[TextExtraction]   query: "$q"');
     }
 
     return queries.toSet().toList(); // deduplicate
@@ -135,6 +212,12 @@ class ExtractedText {
   final List<String> bottomText;
   final int blockCount;
 
+  /// Lines with metadata/noise removed, sorted by bounding-box area (largest first).
+  final List<String> filteredLines;
+
+  /// Bounding-box area for each filtered line (text -> area in px²).
+  final Map<String, double> boundingBoxAreas;
+
   const ExtractedText({
     required this.rawText,
     required this.lines,
@@ -142,6 +225,8 @@ class ExtractedText {
     required this.topText,
     required this.bottomText,
     required this.blockCount,
+    this.filteredLines = const [],
+    this.boundingBoxAreas = const {},
   });
 
   factory ExtractedText.empty() => const ExtractedText(
@@ -151,6 +236,8 @@ class ExtractedText {
         topText: [],
         bottomText: [],
         blockCount: 0,
+        filteredLines: [],
+        boundingBoxAreas: {},
       );
 
   bool get hasText => rawText.isNotEmpty;
