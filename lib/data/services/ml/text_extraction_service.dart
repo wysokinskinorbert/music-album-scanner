@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 /// Extracts text from album cover images using Google ML Kit OCR.
@@ -11,12 +12,23 @@ class TextExtractionService {
 
   /// Extract all text blocks from an image file.
   Future<ExtractedText> extractText(String imagePath) async {
+    debugPrint('[TextExtraction] extractText path="$imagePath"');
     final inputImage = InputImage.fromFilePath(imagePath);
+    debugPrint('[TextExtraction] InputImage created, filePath=${inputImage.filePath}');
 
     try {
       final recognizedText = await _textRecognizer.processImage(inputImage);
+      debugPrint('[TextExtraction] processImage done, blocks=${recognizedText.blocks.length}');
+      for (final block in recognizedText.blocks) {
+        debugPrint('[TextExtraction] block: "${block.text}" (${block.boundingBox})');
+        for (final line in block.lines) {
+          debugPrint('[TextExtraction]   line: "${line.text}" conf=${line.confidence}');
+        }
+      }
       return _parseRecognizedText(recognizedText);
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[TextExtraction] ERROR: $e');
+      debugPrint('[TextExtraction] Stack: $stack');
       return ExtractedText.empty();
     }
   }

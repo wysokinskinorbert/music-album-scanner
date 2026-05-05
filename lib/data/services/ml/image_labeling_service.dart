@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 
 /// Labels album cover images using Google ML Kit.
@@ -10,12 +11,19 @@ class ImageLabelingService {
 
   /// Label an image file - returns detected concepts/objects.
   Future<List<ImageLabel>> labelImage(String imagePath) async {
+    debugPrint('[ImageLabeler] labelImage path="$imagePath"');
     final inputImage = InputImage.fromFilePath(imagePath);
 
     try {
       final labels = await _labeler.processImage(inputImage);
+      debugPrint('[ImageLabeler] found ${labels.length} labels');
+      for (final l in labels) {
+        debugPrint('[ImageLabeler]   ${l.label}: ${(l.confidence * 100).toStringAsFixed(1)}%');
+      }
       return labels;
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[ImageLabeler] ERROR: $e');
+      debugPrint('[ImageLabeler] Stack: $stack');
       return [];
     }
   }
